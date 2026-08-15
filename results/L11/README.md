@@ -16,6 +16,8 @@ use the corrected convention `chebyshev-2n-minus-1-v2`:
 | AiiDA restart test | streaming/checkpointed | segment 1 intentionally stopped at recurrence `n=12`; segment 2 resumed with a different worker layout and completed all 33 tasks | `streaming/chi_L11.jld2` |
 | Independent reference | original full-vector algorithm with the `2N-1` correction | 1 node, 1 process, 11 Julia threads | `full_reference/chi_L11.jld2` |
 
+![Corrected L=11 site-resolved spin spectrum](l11_spectrum.png)
+
 The maximum absolute difference between the two collected spectra is
 `9.048317650695026e-14`, comfortably below the validation tolerance of
 `1e-10`. The reference calculation's computational pipeline took 168 seconds;

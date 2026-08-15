@@ -1,5 +1,8 @@
 # aiida-itensor-spin
 
+Adaptation of the spin-chain ITensor code developed by
+[Gonçalo Catarina (@GCatarina)](https://github.com/GCatarina).
+
 Experimental, restart-safe AiiDA orchestration for the Julia/ITensor spin-chain
 spectral calculation on Daint/ALPS.
 
@@ -17,7 +20,7 @@ files are rejected by explicit format and convention checks.
 
 The repository contains two independently exercised implementations:
 
-- `remote/engine/ITensor_libs/SpectralFunction.jl` is Goncalo's original
+- `remote/engine/ITensor_libs/SpectralFunction.jl` is Gonçalo's original
   full-vector implementation with only the `2N` to `2N-1` correction;
 - `remote/engine/SpectralFunctionCheckpointed.jl` is the restartable,
   memory-saving implementation used by AiiDA.
@@ -44,6 +47,27 @@ Ground-state checkpoints are retrieved once as AiiDA `SinglefileData`.
 Recurrence checkpoints and final task files stay on Daint and pass between
 segments as immutable AiiDA `RemoteData`. Repartitioning a continuation does
 not modify or discard the preceding segment.
+
+## L=11 result for Gonçalo to review
+
+| Item | Value |
+|---|---|
+| Chain and impurity | `L=11`, impurity at site `6` |
+| Couplings | `J=18.4 meV`, `Jp=16.7 meV` |
+| Spectral grid | `0–100 meV`, smearing `2 meV` |
+| Work completed | 1 ground state, 11 sites × 3 channels = 33 tasks |
+| Corrected moments | `N` Chebyshev vectors produce `2N-1` moments |
+| Restart test | stopped at recurrence `n=12`, then resumed and repartitioned |
+| Independent check | streaming versus corrected full-vector result |
+| Maximum absolute difference | `9.048317650695026e-14` (tolerance `1e-10`) |
+
+![Corrected L=11 site-resolved spin spectrum](results/L11/l11_spectrum.png)
+
+Please check whether this L=11 spectrum and the corrected moment convention are
+physically as intended. The directly readable spectrum is
+[`results/L11/streaming/spectrum.tsv`](results/L11/streaming/spectrum.tsv); the
+complete compact JLD2 output and independent reference result are documented in
+[`results/L11/README.md`](results/L11/README.md).
 
 ## Current installation and L=11 example
 
@@ -79,7 +103,7 @@ pytest -q tests
 pip check
 ```
 
-## Physics inputs to review with Goncalo
+## Physics inputs to review with Gonçalo
 
 The WorkChain intentionally exposes only chain `length`, `impurity_site`, and
 random `seed` until the physical interface is agreed. The fresh L=11 test kept
@@ -94,7 +118,7 @@ inputs or expert numerical controls:
   states, and orthogonality penalty;
 - algorithm controls: double-moment construction, backend, and threading mode.
 
-Larger production cases should wait for that review. The corrected spectral
+After Gonçalo's review, we plan to expose the agreed physical quantities as validated WorkChain inputs while keeping numerical controls in an expert section. Larger production cases should wait for that review. The corrected spectral
 code and the restart/repartition machinery are now independently validated.
 
 ## Legacy provenance
