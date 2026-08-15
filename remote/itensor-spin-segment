@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+"""Daint-side driver for one immutable AiiDA spectral segment."""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+TASK_PATTERN = re.compile(r"(?:progress_)?task_(\d{6})_.*\.jld2$")
+DEFAULT_CASE_ROOT = Path(
+    "/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v2"
+)
+DEFAULT_JULIA = Path(
+    "/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia"
+)
+
+
+def fail(message):
+    raise RuntimeError(message)
+
+
+def integer(mapping, key, minimum=0):
+    value = mapping.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        fail(f"{key} must be an integer >= {minimum}")
+    return value
+
+
+def link_or_copy(source, destination):
+    """Materialize an independent state entry efficiently on the same filesystem."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.link(source, destination)
+    except OSError:
+        shutil.copy2(source, destination)
+
+
+def import_previous_state(source_root, worker_root, workers):
+    counts = {"final": 0, "progress": 0}
+    seen = set()
+    if not source_root.exists():
+        return counts
+    for source in sorted(source_root.rglob("*.jld2")):
+        match = TASK_PATTERN.match(source.name)
+        if match is None:
+            continue
+        if source.name in seen:
+            fail(f"duplicate restart state file: {source.name}")
+        seen.add(source.name)
+        task_id = int(match.group(1))
+        rank = (task_id - 1) % workers
+        destination = worker_root / f"worker_{rank}" / source.name
+        link_or_copy(source, destination)
+        counts["progress" if source.name.startswith("progress_") else "final"] += 1
+    return counts
+
+
+def atomic_json(path, payload):
+    temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    os.replace(temporary, path)
+
+
+def run(command, env=None, capture=False):
+    options = {"check": True, "universal_newlines": True, "env": env}
+    if capture:
+        options.update({"stdout": subprocess.PIPE, "stderr": subprocess.PIPE})
+    return subprocess.run(command, **options)
+
+
+def checkpoint_information(julia, case_root, checkpoint):
+    result = run(
+        [
+            str(julia),
+            "--startup-file=no",
+            f"--project={case_root / 'ITensor_env'}",
+            str(case_root / "checkpoint_info.jl"),
+            str(checkpoint),
+        ],
+        capture=True,
+    )
+    values = tuple(int(value) for value in result.stdout.split())
+    if len(values) != 3:
+        fail(f"invalid checkpoint information: {result.stdout!r}")
+    return values
+
+
+def progress_information(julia, case_root, checkpoint, worker_root):
+    result = run(
+        [
+            str(julia),
+            "--startup-file=no",
+            f"--project={case_root / 'ITensor_env'}",
+            str(case_root / "segment_progress.jl"),
+            str(checkpoint),
+            str(worker_root),
+        ],
+        capture=True,
+    )
+    values = tuple(int(value) for value in result.stdout.split())
+    if len(values) != 5:
+        fail(f"invalid segment progress information: {result.stdout!r}")
+    return values
+
+
+def main():
+    if len(sys.argv) != 2:
+        fail("usage: itensor-spin-segment segment.json")
+    started = time.time()
+    config = json.loads(Path(sys.argv[1]).read_text())
+    if config.get("format_version") != 1:
+        fail("unsupported segment input format")
+    layout = config["layout"]
+    parameters = config["parameters"]
+    nodes = integer(layout, "nodes", 1)
+    processes_per_node = integer(layout, "processes_per_node", 1)
+    threads = integer(layout, "threads_per_process", 1)
+    internal_stop_seconds = integer(layout, "internal_stop_seconds", 1)
+    workers = nodes * processes_per_node
+    segment_index = integer(config, "segment_index", 0)
+    if processes_per_node * threads > 288:
+        fail("requested layout exceeds 288 physical cores per node")
+
+    slurm_nodes = int(os.environ.get("SLURM_NNODES", "0"))
+    slurm_tasks = int(os.environ.get("SLURM_NTASKS", "0"))
+    slurm_cpus = int(os.environ.get("SLURM_CPUS_PER_TASK", "0"))
+    if (slurm_nodes, slurm_tasks, slurm_cpus) != (nodes, workers, threads):
+        fail(
+            "Slurm allocation does not match segment layout: "
+            f"got {(slurm_nodes, slurm_tasks, slurm_cpus)}, "
+            f"expected {(nodes, workers, threads)}"
+        )
+
+    case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))
+    julia = Path(os.environ.get("ITENSOR_SPIN_JULIA", DEFAULT_JULIA))
+    checkpoint = Path(config["ground_state"]).resolve()
+    checkpoint.is_file() or fail(f"ground-state checkpoint is unreadable: {checkpoint}")
+    worker_root = Path(config["output_state"]) / "workers"
+    merged_root = Path(config["output_state"]) / "merged"
+    for rank in range(workers):
+        (worker_root / f"worker_{rank}").mkdir(parents=True, exist_ok=True)
+    merged_root.mkdir(parents=True, exist_ok=True)
+
+    imported = {"final": 0, "progress": 0}
+    if config.get("resume_state"):
+        imported = import_previous_state(Path(config["resume_state"]), worker_root, workers)
+
+    length, states, total_tasks = checkpoint_information(julia, case_root, checkpoint)
+    expected_tasks = integer(parameters, "expected_total_tasks", 1)
+    if total_tasks != expected_tasks:
+        fail(f"checkpoint defines {total_tasks} tasks, input expects {expected_tasks}")
+    if workers > total_tasks:
+        fail(f"requested {workers} workers for only {total_tasks} tasks")
+
+    deadline_epoch = int(started + internal_stop_seconds)
+    backend = parameters["backend"]
+    threading_mode = parameters["threading_mode"]
+    stop_after_n = int(layout.get("stop_after_n", 0))
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "MPICH_GPU_SUPPORT_ENABLED": "0",
+            "ITENSOR_SPIN_DEADLINE_EPOCH": str(deadline_epoch),
+            "ITENSOR_SPIN_STOP_AFTER_N": str(stop_after_n),
+        }
+    )
+    run(
+        [
+            "srun",
+            "--exclusive",
+            "--exact",
+            f"--nodes={nodes}",
+            f"--ntasks={workers}",
+            f"--ntasks-per-node={processes_per_node}",
+            f"--cpus-per-task={threads}",
+            "--cpu-bind=cores",
+            "--distribution=block:block",
+            f"--output={worker_root}/worker_%t/stdout.txt",
+            f"--error={worker_root}/worker_%t/stderr.txt",
+            str(case_root / "run_segment_rank.sh"),
+            str(checkpoint),
+            str(worker_root),
+            str(case_root),
+            backend,
+            threading_mode,
+        ],
+        env=environment,
+    )
+
+    (
+        reported_total,
+        completed_tasks,
+        progress_units,
+        progress_units_total,
+        recurrence_target,
+    ) = progress_information(julia, case_root, checkpoint, worker_root)
+    if reported_total != total_tasks:
+        fail("progress helper and checkpoint disagree on total task count")
+    complete = completed_tasks == total_tasks
+    state = "complete" if complete else "checkpointed"
+
+    if complete:
+        run(
+            [
+                "srun",
+                "--exclusive",
+                "--exact",
+                "--nodes=1",
+                "--ntasks=1",
+                "--cpus-per-task=1",
+                "--cpu-bind=cores",
+                "env",
+                "JULIA_NUM_THREADS=1,0",
+                str(julia),
+                "--startup-file=no",
+                f"--project={case_root / 'ITensor_env'}",
+                str(case_root / "collect_tasks.jl"),
+                "--input-root",
+                str(worker_root),
+                "--output",
+                str(merged_root),
+                "--checkpoint",
+                str(checkpoint),
+                "--backend",
+                backend,
+                "--threading-mode",
+                threading_mode,
+                "--reference-tolerance",
+                "1e-10",
+            ]
+        )
+
+    status = {
+        "format_version": 1,
+        "state": state,
+        "segment_index": segment_index,
+        "length": length,
+        "ground_states": states,
+        "total_tasks": total_tasks,
+        "completed_tasks": completed_tasks,
+        "progress_units_completed": progress_units,
+        "progress_units_total": progress_units_total,
+        "recurrence_target_per_task": recurrence_target,
+        "chebyshev_convention": parameters["chebyshev_convention"],
+        "backend": backend,
+        "threading_mode": threading_mode,
+    }
+    summary = {
+        "format_version": 1,
+        "segment_index": segment_index,
+        "layout": layout,
+        "imported_final_tasks": imported["final"],
+        "imported_progress_checkpoints": imported["progress"],
+        "elapsed_seconds": time.time() - started,
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+    }
+    atomic_json(Path(config["status_file"]), status)
+    atomic_json(Path(config["summary_file"]), summary)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as exception:
+        print(f"itensor-spin-segment: {exception}", file=sys.stderr)
+        raise
+

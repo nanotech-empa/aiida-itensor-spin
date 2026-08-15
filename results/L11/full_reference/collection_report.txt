@@ -1,0 +1,14 @@
+format version = 3
+backend = full
+threading mode = outer
+moment convention = chebyshev-2n-minus-1-v2
+L = 11
+states = 1
+channels = ["zz", "pm", "mp"]
+expected tasks = 33
+collected tasks = 33
+checkpoint = /capstor/scratch/cscs/cpi/aiida/02/7f/0380-f4ae-425a-a990-e497bb868e73/gs_checkpoint.jld2
+checkpoint sha256 = 1a6887aa863e987c19c7691208bf90a6b124f6245a12fb300c1b5698b813d105
+reference = /capstor/scratch/cscs/cpi/aiida/b8/b7/d2e5-24fb-46dd-91d5-8edd8ae53df7/state/merged/chi_L11.jld2
+reference max abs difference = 9.048317650695026e-14
+reference tolerance = 1.0e-10

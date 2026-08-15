@@ -1,0 +1,3 @@
+Merged result written to /capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v2/results/l11_full_reference_v2/job_4489512/merged/chi_L11.jld2
+Validated 33 tasks: 1 states × 11 sites × 3 channels
+Reference max abs difference = 9.048317650695026e-14

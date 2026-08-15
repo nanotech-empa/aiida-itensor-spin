@@ -1,0 +1,16 @@
+slurm_job_id=4489512
+nodes=1
+processes_per_node=1
+processes=1
+threads_per_process=11
+allocated_worker_cores=11
+L=11
+states=1
+channels=3
+tasks=33
+backend=full
+moment_convention=chebyshev-2n-minus-1-v2
+threading_mode=outer
+checkpoint=/capstor/scratch/cscs/cpi/aiida/02/7f/0380-f4ae-425a-a990-e497bb868e73/gs_checkpoint.jld2
+pipeline_seconds=168
+result=/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v2/results/l11_full_reference_v2/job_4489512/merged/chi_L11.jld2

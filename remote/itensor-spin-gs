@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""Daint-side driver for the trusted parameterized ground-state calculation."""
+
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+DEFAULT_CASE_ROOT = Path(
+    "/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v2"
+)
+DEFAULT_JULIA = Path(
+    "/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia"
+)
+
+
+def main():
+    if len(sys.argv) != 2:
+        raise RuntimeError("usage: itensor-spin-gs ground_state.json")
+    started = time.time()
+    config = json.loads(Path(sys.argv[1]).read_text())
+    if config.get("format_version") != 1:
+        raise RuntimeError("unsupported GS input format")
+    parameters = config["parameters"]
+    length = int(parameters["length"])
+    impurity_site = int(parameters["impurity_site"])
+    seed = int(parameters["seed"])
+    threading_mode = parameters["threading_mode"]
+    threads = int(os.environ.get("SLURM_CPUS_PER_TASK", "0"))
+    if (
+        int(os.environ.get("SLURM_NNODES", "0")) != 1
+        or int(os.environ.get("SLURM_NTASKS", "0")) != 1
+    ):
+        raise RuntimeError("the GS wrapper requires exactly one node and one Slurm task")
+
+    case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))
+    julia = Path(os.environ.get("ITENSOR_SPIN_JULIA", DEFAULT_JULIA))
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "JULIA_NUM_THREADS": f"{threads},0",
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "MPICH_GPU_SUPPORT_ENABLED": "0",
+        }
+    )
+    command = [
+        "srun",
+        "--exclusive",
+        "--exact",
+        "--nodes=1",
+        "--ntasks=1",
+        f"--cpus-per-task={threads}",
+        "--cpu-bind=cores",
+        str(julia),
+        "--startup-file=no",
+        f"--project={case_root / 'ITensor_env'}",
+        str(case_root / "prepare_gs.jl"),
+        "--output",
+        ".",
+        "--seed",
+        str(seed),
+        "--L",
+        str(length),
+        "--impurity-site",
+        str(impurity_site),
+        "--threading-mode",
+        threading_mode,
+    ]
+    with Path("gs-runtime-stdout.txt").open("w") as stdout, Path(
+        "gs-runtime-stderr.txt"
+    ).open("w") as stderr:
+        subprocess.run(
+            command,
+            check=True,
+            universal_newlines=True,
+            env=environment,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+    checkpoint = Path("gs_checkpoint.jld2")
+    digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    status = {
+        "format_version": 1,
+        "state": "complete",
+        "length": length,
+        "impurity_site": impurity_site,
+        "seed": seed,
+        "threading_mode": threading_mode,
+        "julia_threads": threads,
+        "checkpoint_bytes": checkpoint.stat().st_size,
+        "checkpoint_sha256": digest,
+        "elapsed_seconds": time.time() - started,
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+    }
+    Path("gs_status.json").write_text(
+        json.dumps(status, indent=2, sort_keys=True) + "\n"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,11 @@
+format version = 3
+backend = streaming
+threading mode = blocksparse
+moment convention = chebyshev-2n-minus-1-v2
+L = 11
+states = 1
+channels = ["zz", "pm", "mp"]
+expected tasks = 33
+collected tasks = 33
+checkpoint = /capstor/scratch/cscs/cpi/aiida/b8/b7/d2e5-24fb-46dd-91d5-8edd8ae53df7/gs_checkpoint.jld2
+checkpoint sha256 = 1a6887aa863e987c19c7691208bf90a6b124f6245a12fb300c1b5698b813d105
