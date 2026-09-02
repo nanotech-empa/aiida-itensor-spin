@@ -5,9 +5,11 @@ import pytest
 from aiida_itensor_spin.contracts import (
     MOMENT_CONVENTION,
     ContractError,
+    add_discovered_task_count,
     normalize_ground_state_parameters,
     normalize_layout,
     normalize_parameters,
+    select_largest_feasible_layout,
     validate_segment_status,
 )
 
@@ -81,6 +83,58 @@ def test_parameters_require_corrected_chebyshev_convention():
         )
 
 
+def test_task_count_is_discovered_from_ground_state_metadata():
+    parameters = dict(PARAMETERS)
+    parameters.pop("expected_total_tasks")
+    discovered = add_discovered_task_count(
+        parameters,
+        {"length": 11, "ground_states": 1, "total_tasks": 33},
+    )
+    assert discovered["expected_total_tasks"] == 33
+
+
+def test_discovered_task_count_rejects_user_guess_and_bad_metadata():
+    with pytest.raises(ContractError, match="differs"):
+        add_discovered_task_count(
+            PARAMETERS,
+            {"length": 101, "ground_states": 3, "total_tasks": 909},
+        )
+    without_guess = dict(PARAMETERS)
+    without_guess.pop("expected_total_tasks")
+    with pytest.raises(ContractError, match="inconsistent"):
+        add_discovered_task_count(
+            without_guess,
+            {"length": 101, "ground_states": 3, "total_tasks": 303},
+        )
+
+
+def test_largest_feasible_layout_respects_ceilings():
+    base = {
+        "max_nodes": 2,
+        "max_processes_per_node": 6,
+        "max_threads_per_process": 2,
+        "wallclock_seconds": 900,
+        "internal_stop_seconds": 780,
+        "partition": "debug",
+    }
+    l11 = select_largest_feasible_layout(33, base)
+    assert (l11["nodes"], l11["processes_per_node"], l11["workers"]) == (2, 6, 12)
+
+    assert l11["threads_per_process"] == 2
+    one_thread = select_largest_feasible_layout(33, {**base, "max_threads_per_process": 1})
+    assert one_thread["threads_per_process"] == 1
+
+    l101 = select_largest_feasible_layout(
+        909,
+        {
+            **base,
+            "max_nodes": 10,
+            "max_processes_per_node": 12,
+        },
+    )
+    assert (l101["nodes"], l101["processes_per_node"], l101["workers"]) == (10, 12, 120)
+
+
 def test_progress_can_continue_with_a_different_layout():
     previous = validate_segment_status(status(tasks=4, units=400), PARAMETERS)
     current = validate_segment_status(status(tasks=8, units=900), PARAMETERS, previous)
@@ -101,13 +155,14 @@ def test_complete_requires_all_manifest_tasks():
 
 
 def test_ground_state_parameters_are_explicit_and_valid():
-    assert normalize_ground_state_parameters(
-        {"length": 11, "impurity_site": 6, "seed": 20260724, "threading_mode": "blocksparse"}
-    )["length"] == 11
-    with pytest.raises(ContractError, match="cannot exceed"):
+    assert (
         normalize_ground_state_parameters(
-            {"length": 11, "impurity_site": 12, "seed": 20260724}
-        )
+            {"length": 11, "impurity_site": 6, "seed": 20260724, "threading_mode": "blocksparse"}
+        )["length"]
+        == 11
+    )
+    with pytest.raises(ContractError, match="cannot exceed"):
+        normalize_ground_state_parameters({"length": 11, "impurity_site": 12, "seed": 20260724})
 
 
 def test_convention_mismatch_is_rejected():
@@ -115,4 +170,3 @@ def test_convention_mismatch_is_rejected():
     value["chebyshev_convention"] = "revised-final-moment"
     with pytest.raises(ContractError, match="convention"):
         validate_segment_status(value, PARAMETERS)
-

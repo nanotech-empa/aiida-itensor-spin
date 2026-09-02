@@ -8,6 +8,7 @@ from typing import Any
 
 STATUS_FORMAT_VERSION = 1
 MAX_CORES_PER_DAINT_NODE = 288
+RECOMMENDED_THREADS_PER_PROCESS = 2
 ALLOWED_BACKENDS = {"streaming"}
 ALLOWED_THREADING_MODES = {"outer", "blocksparse"}
 MOMENT_CONVENTION = "chebyshev-2n-minus-1-v2"
@@ -44,9 +45,11 @@ def normalize_layout(value: Mapping[str, Any]) -> dict[str, Any]:
             "available on a Daint GH200 node"
         )
 
-    internal_stop_seconds = _integer(
-        value, "internal_stop_seconds", minimum=1
-    ) if "internal_stop_seconds" in value else max(1, wallclock_seconds - 120)
+    internal_stop_seconds = (
+        _integer(value, "internal_stop_seconds", minimum=1)
+        if "internal_stop_seconds" in value
+        else max(1, wallclock_seconds - 120)
+    )
     if internal_stop_seconds >= wallclock_seconds:
         raise ContractError("internal_stop_seconds must be smaller than wallclock_seconds")
 
@@ -65,9 +68,73 @@ def normalize_layout(value: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def normalize_resource_limits(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate user ceilings for automatic spectral resource selection."""
+    max_nodes = _integer(value, "max_nodes", minimum=1)
+    max_processes = _integer(value, "max_processes_per_node", minimum=1)
+    max_threads = _integer(value, "max_threads_per_process", minimum=1)
+    if max_processes > MAX_CORES_PER_DAINT_NODE:
+        raise ContractError(f"max_processes_per_node cannot exceed {MAX_CORES_PER_DAINT_NODE}")
+    if max_threads > MAX_CORES_PER_DAINT_NODE:
+        raise ContractError(f"max_threads_per_process cannot exceed {MAX_CORES_PER_DAINT_NODE}")
+
+    wallclock_seconds = _integer(value, "wallclock_seconds", minimum=60)
+    internal_stop_seconds = _integer(value, "internal_stop_seconds", minimum=1)
+    if internal_stop_seconds >= wallclock_seconds:
+        raise ContractError("internal_stop_seconds must be smaller than wallclock_seconds")
+    partition = str(value.get("partition", "normal"))
+    if not partition:
+        raise ContractError("partition cannot be empty")
+    return {
+        "max_nodes": max_nodes,
+        "max_processes_per_node": max_processes,
+        "max_threads_per_process": max_threads,
+        "wallclock_seconds": wallclock_seconds,
+        "internal_stop_seconds": internal_stop_seconds,
+        "partition": partition,
+    }
+
+
+def select_largest_feasible_layout(
+    total_tasks: int, resource_limits: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Select the largest uniform worker layout within user ceilings."""
+    tasks = _integer({"total_tasks": total_tasks}, "total_tasks", minimum=1)
+    limits = normalize_resource_limits(resource_limits)
+    worker_ceiling = min(
+        limits["max_nodes"] * limits["max_processes_per_node"],
+        tasks,
+    )
+    best: tuple[int, int, int] | None = None
+    for nodes in range(1, min(limits["max_nodes"], worker_ceiling) + 1):
+        processes_per_node = min(limits["max_processes_per_node"], worker_ceiling // nodes)
+        if processes_per_node < 1:
+            continue
+        workers = nodes * processes_per_node
+        candidate = (workers, -nodes, processes_per_node)
+        if best is None or candidate > best:
+            best = candidate
+    if best is None:
+        raise ContractError("resource limits cannot place even one spectral worker")
+    workers, negative_nodes, processes_per_node = best
+    threads_per_process = min(
+        RECOMMENDED_THREADS_PER_PROCESS,
+        limits["max_threads_per_process"],
+        MAX_CORES_PER_DAINT_NODE // processes_per_node,
+    )
+    return {
+        "nodes": -negative_nodes,
+        "processes_per_node": processes_per_node,
+        "threads_per_process": threads_per_process,
+        "wallclock_seconds": limits["wallclock_seconds"],
+        "internal_stop_seconds": limits["internal_stop_seconds"],
+        "partition": limits["partition"],
+        "workers": workers,
+    }
+
+
 def normalize_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
     """Validate invariant scientific/algorithm inputs for every segment."""
-    expected_total_tasks = _integer(value, "expected_total_tasks", minimum=1)
     convention = str(value.get("chebyshev_convention", "")).strip()
     if convention != MOMENT_CONVENTION:
         raise ContractError(
@@ -80,10 +147,14 @@ def normalize_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
         raise ContractError(f"backend must be one of {sorted(ALLOWED_BACKENDS)}")
     threading_mode = str(value.get("threading_mode", "blocksparse")).lower()
     if threading_mode not in ALLOWED_THREADING_MODES:
-        raise ContractError(
-            f"threading_mode must be one of {sorted(ALLOWED_THREADING_MODES)}"
-        )
+        raise ContractError(f"threading_mode must be one of {sorted(ALLOWED_THREADING_MODES)}")
 
+    checkpoint_every = (
+        _integer(value, "checkpoint_every", minimum=1) if "checkpoint_every" in value else 1
+    )
+    heartbeat_every = (
+        _integer(value, "heartbeat_every", minimum=1) if "heartbeat_every" in value else 1
+    )
     checkpoint_name = safe_relative_path(
         str(value.get("ground_state_filename", "gs_checkpoint.jld2")),
         label="ground_state_filename",
@@ -91,14 +162,40 @@ def normalize_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
     result = dict(value)
     result.update(
         {
-            "expected_total_tasks": expected_total_tasks,
             "chebyshev_convention": convention,
             "backend": backend,
             "threading_mode": threading_mode,
             "ground_state_filename": checkpoint_name,
+            "checkpoint_every": checkpoint_every,
+            "heartbeat_every": heartbeat_every,
         }
     )
+    if "expected_total_tasks" in value:
+        result["expected_total_tasks"] = _integer(value, "expected_total_tasks", minimum=1)
     return result
+
+
+def add_discovered_task_count(
+    parameters: Mapping[str, Any], ground_state_metadata: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Add the task count discovered from a completed ground-state checkpoint."""
+    normalized = normalize_parameters(parameters)
+    length = _integer(ground_state_metadata, "length", minimum=3)
+    ground_states = _integer(ground_state_metadata, "ground_states", minimum=1)
+    total_tasks = _integer(ground_state_metadata, "total_tasks", minimum=1)
+    derived_total = 3 * length * ground_states
+    if total_tasks != derived_total:
+        raise ContractError(
+            "ground-state metadata task count is inconsistent with 3 * length * ground_states"
+        )
+    supplied_total = normalized.get("expected_total_tasks")
+    if supplied_total is not None and supplied_total != total_tasks:
+        raise ContractError(
+            f"supplied expected_total_tasks={supplied_total} differs from the "
+            f"ground-state checkpoint value {total_tasks}"
+        )
+    normalized["expected_total_tasks"] = total_tasks
+    return normalized
 
 
 def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
@@ -110,9 +207,7 @@ def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any
     seed = _integer(value, "seed", minimum=0)
     threading_mode = str(value.get("threading_mode", "blocksparse")).lower()
     if threading_mode not in ALLOWED_THREADING_MODES:
-        raise ContractError(
-            f"threading_mode must be one of {sorted(ALLOWED_THREADING_MODES)}"
-        )
+        raise ContractError(f"threading_mode must be one of {sorted(ALLOWED_THREADING_MODES)}")
     return {
         "length": length,
         "impurity_site": impurity_site,
@@ -130,9 +225,7 @@ def validate_segment_status(
     params = normalize_parameters(parameters)
     status = dict(raw)
     if status.get("format_version") != STATUS_FORMAT_VERSION:
-        raise ContractError(
-            f"unsupported segment status format: {status.get('format_version')!r}"
-        )
+        raise ContractError(f"unsupported segment status format: {status.get('format_version')!r}")
     if status.get("state") not in {"checkpointed", "complete"}:
         raise ContractError("segment state must be 'checkpointed' or 'complete'")
     if status.get("chebyshev_convention") != params["chebyshev_convention"]:
@@ -146,10 +239,9 @@ def validate_segment_status(
     completed_tasks = _integer(status, "completed_tasks", minimum=0)
     progress_units = _integer(status, "progress_units_completed", minimum=0)
     progress_units_total = _integer(status, "progress_units_total", minimum=1)
-    if total_tasks != params["expected_total_tasks"]:
-        raise ContractError(
-            f"segment reports {total_tasks} tasks; expected {params['expected_total_tasks']}"
-        )
+    expected_total_tasks = params.get("expected_total_tasks")
+    if expected_total_tasks is not None and total_tasks != expected_total_tasks:
+        raise ContractError(f"segment reports {total_tasks} tasks; expected {expected_total_tasks}")
     if completed_tasks > total_tasks:
         raise ContractError("completed_tasks exceeds total_tasks")
     if progress_units > progress_units_total:
@@ -163,6 +255,8 @@ def validate_segment_status(
     if previous is not None:
         previous_tasks = _integer(previous, "completed_tasks", minimum=0)
         previous_units = _integer(previous, "progress_units_completed", minimum=0)
+        if total_tasks != _integer(previous, "total_tasks", minimum=1):
+            raise ContractError("total task count changed between segments")
         if completed_tasks < previous_tasks or progress_units < previous_units:
             raise ContractError("segment progress went backwards")
         if progress_units_total != _integer(previous, "progress_units_total", minimum=1):
@@ -171,4 +265,3 @@ def validate_segment_status(
 
     status["made_progress"] = made_progress
     return status
-

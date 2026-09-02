@@ -11,12 +11,8 @@ import time
 from pathlib import Path
 
 TASK_PATTERN = re.compile(r"(?:progress_)?task_(\d{6})_.*\.jld2$")
-DEFAULT_CASE_ROOT = Path(
-    "/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v2"
-)
-DEFAULT_JULIA = Path(
-    "/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia"
-)
+DEFAULT_CASE_ROOT = Path("/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v4")
+DEFAULT_JULIA = Path("/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia")
 
 
 def fail(message):
@@ -141,24 +137,29 @@ def main():
     checkpoint.is_file() or fail(f"ground-state checkpoint is unreadable: {checkpoint}")
     worker_root = Path(config["output_state"]) / "workers"
     merged_root = Path(config["output_state"]) / "merged"
+    compact_root = Path("compact_result")
     for rank in range(workers):
         (worker_root / f"worker_{rank}").mkdir(parents=True, exist_ok=True)
     merged_root.mkdir(parents=True, exist_ok=True)
+    compact_root.mkdir(parents=True, exist_ok=True)
 
     imported = {"final": 0, "progress": 0}
     if config.get("resume_state"):
         imported = import_previous_state(Path(config["resume_state"]), worker_root, workers)
 
     length, states, total_tasks = checkpoint_information(julia, case_root, checkpoint)
-    expected_tasks = integer(parameters, "expected_total_tasks", 1)
-    if total_tasks != expected_tasks:
-        fail(f"checkpoint defines {total_tasks} tasks, input expects {expected_tasks}")
+    if "expected_total_tasks" in parameters:
+        expected_tasks = integer(parameters, "expected_total_tasks", 1)
+        if total_tasks != expected_tasks:
+            fail(f"checkpoint defines {total_tasks} tasks, input expects {expected_tasks}")
     if workers > total_tasks:
         fail(f"requested {workers} workers for only {total_tasks} tasks")
 
     deadline_epoch = int(started + internal_stop_seconds)
     backend = parameters["backend"]
     threading_mode = parameters["threading_mode"]
+    checkpoint_every = integer(parameters, "checkpoint_every", 1)
+    heartbeat_every = integer(parameters, "heartbeat_every", 1)
     stop_after_n = int(layout.get("stop_after_n", 0))
     environment = os.environ.copy()
     environment.update(
@@ -169,6 +170,8 @@ def main():
             "MPICH_GPU_SUPPORT_ENABLED": "0",
             "ITENSOR_SPIN_DEADLINE_EPOCH": str(deadline_epoch),
             "ITENSOR_SPIN_STOP_AFTER_N": str(stop_after_n),
+            "ITENSOR_SPIN_CHECKPOINT_EVERY": str(checkpoint_every),
+            "ITENSOR_SPIN_HEARTBEAT_EVERY": str(heartbeat_every),
         }
     )
     run(
@@ -236,6 +239,10 @@ def main():
                 "1e-10",
             ]
         )
+        for filename in ("spectrum.tsv", "collection_report.txt", "task_timings.tsv"):
+            source = merged_root / filename
+            source.is_file() or fail(f"collector did not create {filename}")
+            shutil.copy2(source, compact_root / filename)
 
     status = {
         "format_version": 1,
@@ -272,4 +279,3 @@ if __name__ == "__main__":
     except Exception as exception:
         print(f"itensor-spin-segment: {exception}", file=sys.stderr)
         raise
-
