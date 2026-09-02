@@ -193,4 +193,9 @@ write(
 )
 close(fw)
 
+dimensions_filename = joinpath(output_dir, "gs_dimensions.txt")
+open(dimensions_filename, "w") do dimensions
+    println(dimensions, "$L\t$nGS\t$(3 * L * nGS)")
+end
+
 println("GS checkpoint written to $checkpoint_filename")

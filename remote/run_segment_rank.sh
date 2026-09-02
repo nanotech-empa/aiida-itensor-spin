@@ -16,6 +16,8 @@ WORKERS=${SLURM_NTASKS:?SLURM_NTASKS is required}
 THREADS=${SLURM_CPUS_PER_TASK:?SLURM_CPUS_PER_TASK is required}
 DEADLINE_EPOCH=${ITENSOR_SPIN_DEADLINE_EPOCH:?deadline is required}
 STOP_AFTER_N=${ITENSOR_SPIN_STOP_AFTER_N:-0}
+CHECKPOINT_EVERY=${ITENSOR_SPIN_CHECKPOINT_EVERY:-1}
+HEARTBEAT_EVERY=${ITENSOR_SPIN_HEARTBEAT_EVERY:-1}
 ENV_ROOT=${CODE_ROOT}/ITensor_env
 JULIA_BIN=${ITENSOR_SPIN_JULIA:-/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia}
 worker_dir=${WORKER_ROOT}/worker_${RANK}
@@ -33,8 +35,8 @@ exec "${JULIA_BIN}" --startup-file=no --project="${ENV_ROOT}" \
     --backend "${BACKEND}" \
     --threading-mode "${THREADING_MODE}" \
     --resume true \
-    --checkpoint-every 1 \
-    --heartbeat-every 1 \
+    --checkpoint-every "${CHECKPOINT_EVERY}" \
+    --heartbeat-every "${HEARTBEAT_EVERY}" \
     --stop-after-n "${STOP_AFTER_N}" \
     --stop-before-epoch "${DEADLINE_EPOCH}"
 

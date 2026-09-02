@@ -56,24 +56,40 @@ class SpectralSegmentCalculation(CalcJob):
         super().define(spec)
         spec.input("ground_state", valid_type=orm.SinglefileData)
         spec.input("parent_folder", valid_type=orm.RemoteData, required=False)
-        spec.input("parameters", valid_type=orm.Dict)
-        spec.input("layout", valid_type=orm.Dict)
+        spec.input(
+            "resource_plan",
+            valid_type=orm.Dict,
+            help="Provenance-recorded output of the resource-planning CalcFunction.",
+        )
         spec.input("segment_index", valid_type=orm.Int)
         spec.output("segment_status", valid_type=orm.Dict, required=False)
         spec.output("segment_summary", valid_type=orm.Dict, required=False)
+        spec.output("spectrum", valid_type=orm.SinglefileData, required=False)
+        spec.output("collection_report", valid_type=orm.SinglefileData, required=False)
+        spec.output("task_timings", valid_type=orm.SinglefileData, required=False)
         spec.exit_code(300, "ERROR_MISSING_RETRIEVED", message="No retrieved folder found.")
         spec.exit_code(301, "ERROR_MISSING_STATUS", message="segment_status.json is missing.")
         spec.exit_code(302, "ERROR_INVALID_STATUS", message="Invalid segment status report.")
         spec.exit_code(303, "ERROR_MISSING_SUMMARY", message="segment_summary.json is missing.")
         spec.exit_code(304, "ERROR_REMOTE_SEGMENT", message="The remote segment reported failure.")
-        spec.inputs["metadata"]["options"]["parser_name"].default = (
-            "itensor_spin.spectral_segment"
+        spec.exit_code(
+            305,
+            "ERROR_MISSING_RESULT",
+            message="A complete segment is missing compact result files.",
         )
+        spec.inputs["metadata"]["options"]["parser_name"].default = "itensor_spin.spectral_segment"
         spec.inputs["metadata"]["options"]["withmpi"].default = False
 
     def prepare_for_submission(self, folder):
-        parameters = normalize_parameters(self.inputs.parameters.get_dict())
-        layout = normalize_layout(self.inputs.layout.get_dict())
+        plan = self.inputs.resource_plan.get_dict()
+        if plan.get("state") != "selected":
+            raise ValueError("resource_plan must have state='selected'")
+        parameters = normalize_parameters(plan["parameters"])
+        layout = normalize_layout(plan["selected_layout"])
+        if plan.get("pending_tasks", 0) < 1 or plan.get("workers") != (
+            layout["nodes"] * layout["processes_per_node"]
+        ):
+            raise ValueError("resource_plan task/worker metadata is inconsistent")
         if "parent_folder" in self.inputs and (
             self.inputs.parent_folder.computer.uuid != self.inputs.code.computer.uuid
         ):
@@ -122,6 +138,11 @@ class SpectralSegmentCalculation(CalcJob):
             )
         ]
         calc_info.remote_symlink_list = remote_symlink_list
-        calc_info.retrieve_list = ["segment_status.json", "segment_summary.json"]
+        calc_info.retrieve_list = [
+            "segment_status.json",
+            "segment_summary.json",
+            "scheduler-stdout.txt",
+            "scheduler-stderr.txt",
+            "compact_result",
+        ]
         return calc_info
-

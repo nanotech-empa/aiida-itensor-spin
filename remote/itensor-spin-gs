@@ -9,12 +9,8 @@ import sys
 import time
 from pathlib import Path
 
-DEFAULT_CASE_ROOT = Path(
-    "/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v2"
-)
-DEFAULT_JULIA = Path(
-    "/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia"
-)
+DEFAULT_CASE_ROOT = Path("/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v4")
+DEFAULT_JULIA = Path("/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia")
 
 
 def main():
@@ -84,11 +80,21 @@ def main():
         )
 
     checkpoint = Path("gs_checkpoint.jld2")
+    dimensions = Path("gs_dimensions.txt").read_text().split()
+    if len(dimensions) != 3:
+        raise RuntimeError(f"invalid GS dimensions: {dimensions!r}")
+    reported_length, ground_states, total_tasks = map(int, dimensions)
+    if reported_length != length:
+        raise RuntimeError(f"GS dimensions report L={reported_length}, expected L={length}")
+    if ground_states < 1 or total_tasks != 3 * length * ground_states:
+        raise RuntimeError("GS dimensions are inconsistent with 3 * length * ground_states")
     digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
     status = {
         "format_version": 1,
         "state": "complete",
         "length": length,
+        "ground_states": ground_states,
+        "total_tasks": total_tasks,
         "impurity_site": impurity_site,
         "seed": seed,
         "threading_mode": threading_mode,
@@ -98,9 +104,7 @@ def main():
         "elapsed_seconds": time.time() - started,
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
     }
-    Path("gs_status.json").write_text(
-        json.dumps(status, indent=2, sort_keys=True) + "\n"
-    )
+    Path("gs_status.json").write_text(json.dumps(status, indent=2, sort_keys=True) + "\n")
     return 0
 
 
