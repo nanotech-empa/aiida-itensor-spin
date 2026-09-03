@@ -12,8 +12,8 @@ resource-planning CalcFunction, runs bounded spectral segments, collects the
 spectrum, and returns compact result files. Each segment reads an immutable
 ground-state checkpoint and, when necessary, the immutable state of the
 preceding segment. A valid `checkpointed` result triggers the next submission
-automatically; a hard execution error stops safely instead of blindly consuming
-more nodes.
+automatically. The workflow can also make a bounded continuation from preserved
+remote state when an execution ends unexpectedly.
 
 ## Scientific correction and validation
 
@@ -74,17 +74,18 @@ complete compact JLD2 output and independent reference result are documented in
 
 ## Current installation and L=11 example
 
-The validated Daint engine is isolated at:
+The validated Daint engines are isolated at:
 
 ```text
 /capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v4
+/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v5
 ```
 
-The validated AiiDA codes are:
+The GS remains on v4; restartable spectral calculations use v5:
 
 ```text
 itensor-spin-gs-0.3.0-v4@daint.alps_lp83
-itensor-spin-segment-0.3.0-v4@daint.alps_lp83
+itensor-spin-segment-0.3.0-v5@daint.alps_lp83
 ```
 
 From this repository, submit the complete fresh validation with:
@@ -128,6 +129,23 @@ CalcFunction `9856`, reduced the allocation from 2 nodes x 6 processes/node to
 1 node x 4 processes, and submitted segment CalcJob `9859`, which completed the
 remaining four tasks. The final spectrum `SinglefileData<9864>` is numerically
 identical to the retained corrected L=11 reference.
+
+### Scalable checkpoint accounting
+
+The v5 segment engine publishes a valid status before starting its expensive
+worker step and records each recurrence iteration in a tiny atomic sidecar.
+Segment accounting therefore never deserializes the large MPS checkpoints.
+Legacy v4 checkpoints without sidecars are accepted with a conservative
+progress lower bound and are fully validated by a worker when resumed.
+
+This change was motivated by an L=101 segment whose 560 physics workers stopped
+cleanly but whose old accounting pass tried to load 379 GiB of checkpoints and
+hit the outer Slurm walltime before writing its status. The v5 scanner processed
+the same preserved state in 43.6 seconds on one debug node. A fresh two-segment
+L=11 v5 acceptance WorkChain
+`b5a66148-7a0f-488b-b5ac-4583dc4fcacb` completed 30/33 tasks, automatically
+repacked the remaining three tasks, and returned a spectrum byte-for-byte
+identical to the retained corrected reference.
 
 The user-facing resource ceilings are stored in the `spectral_resources`
 Dict: `max_nodes`, `max_processes_per_node`, and

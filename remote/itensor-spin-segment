@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 TASK_PATTERN = re.compile(r"(?:progress_)?task_(\d{6})_.*\.jld2$")
-DEFAULT_CASE_ROOT = Path("/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v4")
+DEFAULT_CASE_ROOT = Path("/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v5")
 DEFAULT_JULIA = Path("/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia")
 
 
@@ -51,6 +51,9 @@ def import_previous_state(source_root, worker_root, workers):
         rank = (task_id - 1) % workers
         destination = worker_root / f"worker_{rank}" / source.name
         link_or_copy(source, destination)
+        source_status = Path(f"{source}.status")
+        if source_status.is_file():
+            link_or_copy(source_status, Path(f"{destination}.status"))
         counts["progress" if source.name.startswith("progress_") else "final"] += 1
     return counts
 
@@ -101,6 +104,38 @@ def progress_information(julia, case_root, checkpoint, worker_root):
     if len(values) != 5:
         fail(f"invalid segment progress information: {result.stdout!r}")
     return values
+
+
+def status_payload(parameters, length, states, progress, segment_index):
+    total_tasks, completed_tasks, progress_units, progress_units_total, recurrence_target = progress
+    return {
+        "format_version": 1,
+        "segment_index": segment_index,
+        "state": "complete" if completed_tasks == total_tasks else "checkpointed",
+        "length": length,
+        "ground_states": states,
+        "total_tasks": total_tasks,
+        "completed_tasks": completed_tasks,
+        "progress_units_completed": progress_units,
+        "progress_units_total": progress_units_total,
+        "recurrence_target_per_task": recurrence_target,
+        "chebyshev_convention": parameters["chebyshev_convention"],
+        "backend": parameters["backend"],
+        "threading_mode": parameters["threading_mode"],
+    }
+
+
+def summary_payload(segment_index, layout, imported, started, phase):
+    return {
+        "format_version": 1,
+        "segment_index": segment_index,
+        "layout": layout,
+        "imported_final_tasks": imported["final"],
+        "imported_progress_checkpoints": imported["progress"],
+        "elapsed_seconds": time.time() - started,
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+        "phase": phase,
+    }
 
 
 def main():
@@ -155,6 +190,22 @@ def main():
     if workers > total_tasks:
         fail(f"requested {workers} workers for only {total_tasks} tasks")
 
+    # Publish a valid restart status before the expensive srun. If Slurm or a
+    # node terminates the segment unexpectedly, AiiDA can continue from this
+    # immutable remote folder rather than treating the work as lost.
+    initial_progress = progress_information(julia, case_root, checkpoint, worker_root)
+    if initial_progress[0] != total_tasks:
+        fail("progress helper and checkpoint disagree on total task count")
+    if initial_progress[1] < total_tasks:
+        atomic_json(
+            Path(config["status_file"]),
+            status_payload(parameters, length, states, initial_progress, segment_index),
+        )
+        atomic_json(
+            Path(config["summary_file"]),
+            summary_payload(segment_index, layout, imported, started, "initialized"),
+        )
+
     deadline_epoch = int(started + internal_stop_seconds)
     backend = parameters["backend"]
     threading_mode = parameters["threading_mode"]
@@ -174,28 +225,29 @@ def main():
             "ITENSOR_SPIN_HEARTBEAT_EVERY": str(heartbeat_every),
         }
     )
-    run(
-        [
-            "srun",
-            "--exclusive",
-            "--exact",
-            f"--nodes={nodes}",
-            f"--ntasks={workers}",
-            f"--ntasks-per-node={processes_per_node}",
-            f"--cpus-per-task={threads}",
-            "--cpu-bind=cores",
-            "--distribution=block:block",
-            f"--output={worker_root}/worker_%t/stdout.txt",
-            f"--error={worker_root}/worker_%t/stderr.txt",
-            str(case_root / "run_segment_rank.sh"),
-            str(checkpoint),
-            str(worker_root),
-            str(case_root),
-            backend,
-            threading_mode,
-        ],
-        env=environment,
-    )
+    if initial_progress[1] < total_tasks:
+        run(
+            [
+                "srun",
+                "--exclusive",
+                "--exact",
+                f"--nodes={nodes}",
+                f"--ntasks={workers}",
+                f"--ntasks-per-node={processes_per_node}",
+                f"--cpus-per-task={threads}",
+                "--cpu-bind=cores",
+                "--distribution=block:block",
+                f"--output={worker_root}/worker_%t/stdout.txt",
+                f"--error={worker_root}/worker_%t/stderr.txt",
+                str(case_root / "run_segment_rank.sh"),
+                str(checkpoint),
+                str(worker_root),
+                str(case_root),
+                backend,
+                threading_mode,
+            ],
+            env=environment,
+        )
 
     (
         reported_total,
@@ -207,7 +259,6 @@ def main():
     if reported_total != total_tasks:
         fail("progress helper and checkpoint disagree on total task count")
     complete = completed_tasks == total_tasks
-    state = "complete" if complete else "checkpointed"
 
     if complete:
         run(
@@ -244,32 +295,26 @@ def main():
             source.is_file() or fail(f"collector did not create {filename}")
             shutil.copy2(source, compact_root / filename)
 
-    status = {
-        "format_version": 1,
-        "state": state,
-        "segment_index": segment_index,
-        "length": length,
-        "ground_states": states,
-        "total_tasks": total_tasks,
-        "completed_tasks": completed_tasks,
-        "progress_units_completed": progress_units,
-        "progress_units_total": progress_units_total,
-        "recurrence_target_per_task": recurrence_target,
-        "chebyshev_convention": parameters["chebyshev_convention"],
-        "backend": backend,
-        "threading_mode": threading_mode,
-    }
-    summary = {
-        "format_version": 1,
-        "segment_index": segment_index,
-        "layout": layout,
-        "imported_final_tasks": imported["final"],
-        "imported_progress_checkpoints": imported["progress"],
-        "elapsed_seconds": time.time() - started,
-        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
-    }
-    atomic_json(Path(config["status_file"]), status)
-    atomic_json(Path(config["summary_file"]), summary)
+    atomic_json(
+        Path(config["status_file"]),
+        status_payload(
+            parameters,
+            length,
+            states,
+            (
+                reported_total,
+                completed_tasks,
+                progress_units,
+                progress_units_total,
+                recurrence_target,
+            ),
+            segment_index,
+        ),
+    )
+    atomic_json(
+        Path(config["summary_file"]),
+        summary_payload(segment_index, layout, imported, started, "finalized"),
+    )
     return 0
 
 

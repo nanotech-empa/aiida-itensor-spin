@@ -51,3 +51,22 @@ def test_workflow_contract_is_complete_and_provenance_safe():
         "task_timings",
     }.issubset(full_outputs)
     assert "initial_resource_plan" in spectra_inputs
+    assert "max_failed_segments" in spectra_inputs
+    assert "max_failed_segments" in full_inputs
+
+
+def test_segment_driver_publishes_status_before_srun():
+    with open("remote/itensor-spin-segment", encoding="utf8") as handle:
+        driver = handle.read()
+    initial_status = driver.index(
+        'summary_payload(segment_index, layout, imported, started, "initialized")'
+    )
+    worker_srun = driver.index('"srun"', initial_status)
+    assert initial_status < worker_srun
+
+
+def test_progress_scan_never_deserializes_task_checkpoints():
+    with open("remote/segment_progress.jl", encoding="utf8") as handle:
+        source = handle.read()
+    assert "data = load(joinpath(root, filename))" not in source
+    assert 'filename * ".status"' in source
