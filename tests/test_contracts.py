@@ -135,6 +135,22 @@ def test_largest_feasible_layout_respects_ceilings():
     assert (l101["nodes"], l101["processes_per_node"], l101["workers"]) == (10, 12, 120)
 
 
+def test_layout_packs_partial_final_node_instead_of_factoring_worker_count():
+    limits = {
+        "max_nodes": 70,
+        "max_processes_per_node": 8,
+        "max_threads_per_process": 4,
+        "wallclock_seconds": 43200,
+        "internal_stop_seconds": 41400,
+        "partition": "normal",
+    }
+    layout = select_largest_feasible_layout(62, limits)
+    assert (layout["nodes"], layout["processes_per_node"], layout["workers"]) == (8, 8, 62)
+
+    layout = select_largest_feasible_layout(123, limits)
+    assert (layout["nodes"], layout["processes_per_node"], layout["workers"]) == (16, 8, 123)
+
+
 def test_progress_can_continue_with_a_different_layout():
     previous = validate_segment_status(status(tasks=4, units=400), PARAMETERS)
     current = validate_segment_status(status(tasks=8, units=900), PARAMETERS, previous)

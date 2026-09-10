@@ -59,8 +59,10 @@ def derive_resource_plan(
         dict={
             "state": "selected",
             "reason": (
-                "largest uniform worker layout within the supplied ceilings "
-                "while minimizing nodes when worker counts tie; threads per process are capped at 2 based on the validated CPU scaling benchmark"
+                "maximum useful worker count within the supplied ceilings, packed at "
+                "the allowed processes-per-node capacity with a partially occupied "
+                "final node when needed; threads per process are capped at 2 based "
+                "on the validated CPU scaling benchmark"
             ),
             "length": metadata["length"],
             "ground_states": metadata["ground_states"],

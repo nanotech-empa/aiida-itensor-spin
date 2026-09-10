@@ -151,19 +151,29 @@ def main():
     processes_per_node = integer(layout, "processes_per_node", 1)
     threads = integer(layout, "threads_per_process", 1)
     internal_stop_seconds = integer(layout, "internal_stop_seconds", 1)
-    workers = nodes * processes_per_node
+    workers = integer(config, "workers", 1)
+    allocation_capacity = nodes * processes_per_node
     segment_index = integer(config, "segment_index", 0)
     if processes_per_node * threads > 288:
         fail("requested layout exceeds 288 physical cores per node")
+    if workers < nodes or workers > allocation_capacity:
+        fail(
+            f"requested {workers} workers cannot occupy {nodes} nodes with "
+            f"capacity {processes_per_node} per node"
+        )
 
     slurm_nodes = int(os.environ.get("SLURM_NNODES", "0"))
     slurm_tasks = int(os.environ.get("SLURM_NTASKS", "0"))
     slurm_cpus = int(os.environ.get("SLURM_CPUS_PER_TASK", "0"))
-    if (slurm_nodes, slurm_tasks, slurm_cpus) != (nodes, workers, threads):
+    if (slurm_nodes, slurm_tasks, slurm_cpus) != (
+        nodes,
+        allocation_capacity,
+        threads,
+    ):
         fail(
             "Slurm allocation does not match segment layout: "
             f"got {(slurm_nodes, slurm_tasks, slurm_cpus)}, "
-            f"expected {(nodes, workers, threads)}"
+            f"expected {(nodes, allocation_capacity, threads)}"
         )
 
     case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))

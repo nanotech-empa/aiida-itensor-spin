@@ -86,8 +86,15 @@ class SpectralSegmentCalculation(CalcJob):
             raise ValueError("resource_plan must have state='selected'")
         parameters = normalize_parameters(plan["parameters"])
         layout = normalize_layout(plan["selected_layout"])
-        if plan.get("pending_tasks", 0) < 1 or plan.get("workers") != (
-            layout["nodes"] * layout["processes_per_node"]
+        workers = plan.get("workers")
+        capacity = layout["nodes"] * layout["processes_per_node"]
+        if (
+            plan.get("pending_tasks", 0) < 1
+            or isinstance(workers, bool)
+            or not isinstance(workers, int)
+            or workers < layout["nodes"]
+            or workers > capacity
+            or workers > plan["pending_tasks"]
         ):
             raise ValueError("resource_plan task/worker metadata is inconsistent")
         if "parent_folder" in self.inputs and (
@@ -100,6 +107,7 @@ class SpectralSegmentCalculation(CalcJob):
             "segment_index": self.inputs.segment_index.value,
             "parameters": parameters,
             "layout": layout,
+            "workers": workers,
             "ground_state": "gs_checkpoint.jld2",
             "resume_state": "resume_state" if "parent_folder" in self.inputs else None,
             "output_state": "state",

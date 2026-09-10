@@ -98,32 +98,27 @@ def normalize_resource_limits(value: Mapping[str, Any]) -> dict[str, Any]:
 def select_largest_feasible_layout(
     total_tasks: int, resource_limits: Mapping[str, Any]
 ) -> dict[str, Any]:
-    """Select the largest uniform worker layout within user ceilings."""
+    """Select the largest densely packed worker layout within user ceilings.
+
+    ``processes_per_node`` is the allocation capacity, not a requirement that
+    every node contain exactly that many active workers.  The final node may
+    therefore be partially occupied.
+    """
     tasks = _integer({"total_tasks": total_tasks}, "total_tasks", minimum=1)
     limits = normalize_resource_limits(resource_limits)
-    worker_ceiling = min(
+    workers = min(
         limits["max_nodes"] * limits["max_processes_per_node"],
         tasks,
     )
-    best: tuple[int, int, int] | None = None
-    for nodes in range(1, min(limits["max_nodes"], worker_ceiling) + 1):
-        processes_per_node = min(limits["max_processes_per_node"], worker_ceiling // nodes)
-        if processes_per_node < 1:
-            continue
-        workers = nodes * processes_per_node
-        candidate = (workers, -nodes, processes_per_node)
-        if best is None or candidate > best:
-            best = candidate
-    if best is None:
-        raise ContractError("resource limits cannot place even one spectral worker")
-    workers, negative_nodes, processes_per_node = best
+    processes_per_node = min(limits["max_processes_per_node"], workers)
+    nodes = (workers + processes_per_node - 1) // processes_per_node
     threads_per_process = min(
         RECOMMENDED_THREADS_PER_PROCESS,
         limits["max_threads_per_process"],
         MAX_CORES_PER_DAINT_NODE // processes_per_node,
     )
     return {
-        "nodes": -negative_nodes,
+        "nodes": nodes,
         "processes_per_node": processes_per_node,
         "threads_per_process": threads_per_process,
         "wallclock_seconds": limits["wallclock_seconds"],
