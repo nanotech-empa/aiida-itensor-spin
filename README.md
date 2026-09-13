@@ -79,19 +79,20 @@ The validated Daint engines are isolated at:
 ```text
 /capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v4
 /capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v5
+/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v6
 ```
 
-The GS remains on v4; restartable spectral calculations use v5:
+The GS remains on v4; newly submitted restartable spectral calculations use v6:
 
 ```text
 itensor-spin-gs-0.3.0-v4@daint.alps_lp83
-itensor-spin-segment-0.3.0-v5@daint.alps_lp83
+itensor-spin-segment-0.3.0-v6@daint.alps_lp83
 ```
 
 From this repository, submit the complete fresh validation with:
 
 ```console
-verdi run examples/submit_l11.py
+verdi run examples/submit_l11_recovery_v6.py
 ```
 
 The example provides only resource ceilings. After parsing the L=11 GS, the
@@ -146,6 +147,20 @@ L=11 v5 acceptance WorkChain
 `b5a66148-7a0f-488b-b5ac-4583dc4fcacb` completed 30/33 tasks, automatically
 repacked the remaining three tasks, and returned a spectrum byte-for-byte
 identical to the retained corrected reference.
+
+### Explicit unfinished-task assignment (v6)
+
+The v6 segment engine removes the modulo-based tail collision: each segment
+inventories the immutable parent state, assigns every unfinished task exactly
+once, balances workers using the remaining Chebyshev recurrence units, and
+records every worker manifest in `segment_summary`. Completed tasks and
+checkpoints remain untouched.
+
+On 2026-09-13, `SpinChainWorkChain<11703>` (`Finished [0]`) exercised a real
+automatic continuation: segment 1 completed 18/33 tasks, and segment 2 assigned
+the 15 remaining tasks across 12 active workers with no collisions or idle
+workers and completed 33/33. Its 2,750-row spectrum is exactly identical to
+the retained corrected L=11 reference (maximum absolute chi difference `0.0`).
 
 The user-facing resource ceilings are stored in the `spectral_resources`
 Dict: `max_nodes`, `max_processes_per_node`, and
