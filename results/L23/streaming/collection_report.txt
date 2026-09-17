@@ -1,0 +1,11 @@
+format version = 3
+backend = streaming
+threading mode = blocksparse
+moment convention = chebyshev-2n-minus-1-v2
+L = 23
+states = 1
+channels = ["zz", "pm", "mp"]
+expected tasks = 69
+collected tasks = 69
+checkpoint = /ritom/scratch/cscs/cpi/aiida/70/b6/d6cb-ad7f-4a86-a964-d017ce79eff2/gs_checkpoint.jld2
+checkpoint sha256 = c543cc77c399ad84b340e626bfdf2a1a9480ed04d9948be138672dfa7504eafd

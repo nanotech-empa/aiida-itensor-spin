@@ -6,6 +6,26 @@ Adaptation of the spin-chain ITensor code developed by
 Experimental, restart-safe AiiDA orchestration for the Julia/ITensor spin-chain
 spectral calculation on Daint/ALPS.
 
+## New: L=23 comparison with Gonçalo's updated reference
+
+The [17 September L23 experiment](results/L23/README.md) completed all 69
+spectral tasks on Daint: initially **one node, 23 concurrent processes, two
+threads/process**, followed by a four-process checkpoint continuation.
+Total Slurm allocation time, including GS, was **33 min 18 s**.
+
+The relative spectral L2 difference from Gonçalo's supplied result is
+**0.1004%**, with matching per-site peak positions on the sampled grid.
+**The runs did not share a controlled random seed or GS checkpoint**: our
+seed was 20260724; Gonçalo's was unspecified. This is close agreement, not an
+exact-reproduction claim, and the residual difference is not yet explained.
+
+The next planned test is on the **same Mac architecture as Gonçalo**,
+comparing both implementations on the same Mac with a shared GS and controlled
+settings. It has **not yet been performed**. The linked report includes the
+full comparison, honest timing boundaries, and the exact tested source.
+
+## Workflow overview
+
 The public entry point is one complete `SpinChainWorkChain`: it validates
 inputs, computes and parses the ground state, calls a provenance-recorded
 resource-planning CalcFunction, runs bounded spectral segments, collects the

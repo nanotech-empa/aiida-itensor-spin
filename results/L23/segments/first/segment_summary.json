@@ -1,0 +1,144 @@
+{
+  "assignment": {
+    "active_workers": 23,
+    "idle_workers": 0,
+    "maximum_estimated_recurrence_units": 3,
+    "maximum_tasks_per_worker": 3,
+    "minimum_estimated_recurrence_units": 3,
+    "minimum_tasks_per_worker": 3,
+    "pending_tasks": 69,
+    "policy": "unfinished-greedy-recurrence-balance-v1",
+    "worker_task_ids": [
+      [
+        1,
+        24,
+        47
+      ],
+      [
+        2,
+        25,
+        48
+      ],
+      [
+        3,
+        26,
+        49
+      ],
+      [
+        4,
+        27,
+        50
+      ],
+      [
+        5,
+        28,
+        51
+      ],
+      [
+        6,
+        29,
+        52
+      ],
+      [
+        7,
+        30,
+        53
+      ],
+      [
+        8,
+        31,
+        54
+      ],
+      [
+        9,
+        32,
+        55
+      ],
+      [
+        10,
+        33,
+        56
+      ],
+      [
+        11,
+        34,
+        57
+      ],
+      [
+        12,
+        35,
+        58
+      ],
+      [
+        13,
+        36,
+        59
+      ],
+      [
+        14,
+        37,
+        60
+      ],
+      [
+        15,
+        38,
+        61
+      ],
+      [
+        16,
+        39,
+        62
+      ],
+      [
+        17,
+        40,
+        63
+      ],
+      [
+        18,
+        41,
+        64
+      ],
+      [
+        19,
+        42,
+        65
+      ],
+      [
+        20,
+        43,
+        66
+      ],
+      [
+        21,
+        44,
+        67
+      ],
+      [
+        22,
+        45,
+        68
+      ],
+      [
+        23,
+        46,
+        69
+      ]
+    ]
+  },
+  "elapsed_seconds": 1572.6730132102966,
+  "format_version": 1,
+  "imported_final_tasks": 0,
+  "imported_progress_checkpoints": 0,
+  "layout": {
+    "internal_stop_seconds": 1560,
+    "nodes": 1,
+    "partition": "debug",
+    "processes_per_node": 23,
+    "threads_per_process": 2,
+    "wallclock_seconds": 1800
+  },
+  "phase": "finalized",
+  "segment_index": 0,
+  "slurm_job_id": "4682802"
+}

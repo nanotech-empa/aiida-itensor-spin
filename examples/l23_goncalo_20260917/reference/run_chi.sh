@@ -1,0 +1,1 @@
+julia -t 6 --project=/Users/scgo/julia_envs/ITensor chi.jl > run.out &

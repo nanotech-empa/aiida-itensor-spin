@@ -1,0 +1,15 @@
+{
+  "checkpoint_bytes": 887007,
+  "checkpoint_sha256": "c543cc77c399ad84b340e626bfdf2a1a9480ed04d9948be138672dfa7504eafd",
+  "elapsed_seconds": 118.95829844474792,
+  "format_version": 1,
+  "ground_states": 1,
+  "impurity_site": 12,
+  "julia_threads": 8,
+  "length": 23,
+  "seed": 20260724,
+  "slurm_job_id": "4682797",
+  "state": "complete",
+  "threading_mode": "blocksparse",
+  "total_tasks": 69
+}
