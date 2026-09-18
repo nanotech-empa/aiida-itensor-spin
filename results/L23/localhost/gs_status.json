@@ -1,0 +1,16 @@
+{
+  "checkpoint_bytes": 882491,
+  "checkpoint_sha256": "0599b69750513911930ebf47372e458962eec394a91c7e1b5e9c4199c875b936",
+  "elapsed_seconds": 80.4985101222992,
+  "execution_environment": "localhost-direct",
+  "format_version": 1,
+  "ground_states": 1,
+  "hostname": "6a69c5f68e65",
+  "impurity_site": 12,
+  "julia_threads": 8,
+  "length": 23,
+  "seed": 20260724,
+  "state": "complete",
+  "threading_mode": "blocksparse",
+  "total_tasks": 69
+}

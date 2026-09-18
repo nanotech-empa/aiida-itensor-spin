@@ -1,0 +1,14 @@
+frequency_points = 333
+ground_energy_abs_difference_meV = 4.308844836486969e-9
+ground_energy_meV = -574.5775840675017
+highest_energy_meV = 401.8998228575998
+max_abs_difference = 0.000595390035954213
+max_site_relative_integral_difference = 7.510372150682887e-5
+note = "Independent random initial MPS and runtime; report numerical differences, not bitwise equality. No acceptance tolerance has been assumed."
+reference_ground_energy_meV = -574.5775840718105
+reference_highest_energy_meV = 401.89997937127185
+reference_key = "χ_n_i"
+relative_L2_difference = 0.0010057006107395804
+result_key = "χGSi"
+sites = 23
+spectral_tasks = 69

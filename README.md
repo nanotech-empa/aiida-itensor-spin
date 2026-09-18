@@ -19,10 +19,13 @@ The relative spectral L2 difference from Gonçalo's supplied result is
 seed was 20260724; Gonçalo's was unspecified. This is close agreement, not an
 exact-reproduction claim, and the residual difference is not yet explained.
 
-The next planned test is on the **same Mac architecture as Gonçalo**,
-comparing both implementations on the same Mac with a shared GS and controlled
-settings. It has **not yet been performed**. The linked report includes the
-full comparison, honest timing boundaries, and the exact tested source.
+A complete localhost AiiDA run has now also been performed in a Linux
+ARM64 container on Apple Silicon: one GS followed by all 69 spectral tasks with
+four processes and two threads/process. It finished in **41 min 48 s** and
+reproduced the reference with a relative spectral L2 difference of **0.10057%**
+and matching sampled peak positions at all 23 sites. This is an independent
+reproduction on the same architecture class, not a same-machine controlled
+speedup benchmark. The linked report contains both Daint and localhost data.
 
 ## Workflow overview
 

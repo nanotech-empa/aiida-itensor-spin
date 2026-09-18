@@ -91,6 +91,22 @@ Use `verdi process show UUID` and `verdi process report UUID` to inspect a
 run. The completed WorkChain returns the GS checkpoint and summary, final
 status, resource plan, spectrum, collection report, and task timings.
 
+## Validated L=23 result
+
+The command above completed through the standard AiiDA WorkChain on
+18 September 2026. The GS took 1 min 22 s and the single spectral segment took
+40 min 23 s; total WorkChain elapsed time was 41 min 48 s. The segment used four
+processes with two threads each and completed 69/69 tasks without continuation.
+
+Against Gonçalo Catarina's independently generated reference, the relative
+spectral L2 difference was 0.1005701%, the largest per-site relative integrated-
+weight difference was 0.0075104%, and all 23 sampled peak positions matched.
+No acceptance tolerance was specified in advance. The runs did not share a GS
+checkpoint and the reference seed is unknown, so this is an independent
+physics reproduction rather than an exact implementation-equivalence test.
+The retained data and durable AiiDA UUIDs are documented in
+[`results/L23/README.md`](../results/L23/README.md).
+
 ## Deployment on another AiiDAlab instance
 
 The portable pieces are the Python package, pinned Julia project, local

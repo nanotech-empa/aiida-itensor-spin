@@ -1,10 +1,10 @@
-# L23 Daint result — 17 September 2026
+# L23 validation results — 17–18 September 2026
 
-All 69 spectral tasks completed before the 14:00 CEST maintenance deadline.
-The standard AiiDA continuation finished successfully (`Finished [0]`).
-This is a close-agreement comparison for review, not a claim of exact numerical
-reproduction. The next planned test is on the same Mac architecture as
-Gonçalo's reference; that test has not been performed yet.
+The Daint experiment completed all 69 spectral tasks before the 14:00 CEST
+maintenance deadline. The standard AiiDA continuation finished successfully
+(`Finished [0]`). A second complete AiiDA run then finished in a Linux ARM64
+container on Apple Silicon. Both are close-agreement comparisons for review,
+not claims of exact numerical reproduction.
 
 ## Comparison with Gonçalo Catarina's supplied reference
 
@@ -92,25 +92,58 @@ This explains why increasing task concurrency cannot yield a speedup
 proportional to 23/6. Our live per-iteration timer also includes moment
 contractions; his vector-building timer does not.
 
-## Next test: same Mac architecture
+## Localhost ARM64 AiiDA result — 18 September 2026
 
-We will test on the **same Mac architecture as Gonçalo**, recording the exact
-CPU model, memory, operating system, Julia and ITensor versions. Merely using
-two Macs is not proof of identical CPUs or equivalent performance.
+The generalized workflow was installed in the Linux `aarch64` AiiDAlab
+container and submitted through AiiDA's standard `localhost` computer. The GS
+used all eight visible CPU threads; the resource planner then selected one
+local node with four independent processes and two threads/process. Every
+spectral worker received 17 or 18 statically assigned tasks.
 
-For a controlled implementation comparison, the plan is to run both Gonçalo's
-full-vector code and our streaming/checkpointed code on the **same Mac**, with
-the same saved GS checkpoint, matching physics/numerical parameters, and a
-recorded process/thread budget. A fixed seed will also be recorded when
-generating that shared GS. Timings will distinguish initialization, numerical
-work, checkpoint writing, and total elapsed time.
+| Quantity | Localhost result |
+|---|---:|
+| GS elapsed | 1 min 22 s |
+| Spectral segment elapsed | 40 min 23 s |
+| Complete WorkChain elapsed | **41 min 48 s** |
+| Completed tasks / recurrence units | 69/69 / 22494/22494 |
+| Relative spectral L2 difference | 0.0010057006107395804 = **0.1005701%** |
+| Maximum absolute spectral difference | 0.000595390035954213 |
+| Largest per-site relative integrated-weight difference | **0.0075104%** |
+| Sampled per-site peak positions | Match at all 23 sites |
+| Absolute GS-energy difference | 4.308844836486969e-9 meV |
 
-This test is **planned, not performed**. It will help separate implementation
-and threading costs from hardware differences and investigate the residual
-spectral discrepancy. We do not claim that matching the seed or architecture
-alone guarantees bitwise-identical results.
+The reference and localhost run did not share a GS checkpoint. The localhost
+seed was 20260724, while the reference seed is unknown. Consequently this is
+an independent physics reproduction, not an implementation-equivalence test.
+The common ARM64 architecture class also does not establish identical CPU
+models or a controlled performance comparison. Gonçalo's reported scientific
+pipeline took 44 min 43.812 s with different timing boundaries; the two wall
+times should therefore be described as comparable, not as a measured speedup.
 
-## Durable provenance
+The expensive impurity-site tasks dominate the critical path: site 12 took
+approximately 19.4, 18.3 and 14.4 minutes for the `zz`, `pm` and `mp` channels.
+This measured heterogeneity motivates a future cost-aware or dynamic task
+assignment; merely changing thread/process decomposition on the same eight
+cores cannot provide a large gain.
+
+Retained local outputs: [compact JLD2](localhost/chi_L23.jld2),
+[spectrum](localhost/spectrum.tsv), [task timings](localhost/task_timings.tsv),
+[comparison summary](localhost/comparison.toml),
+[per-site comparison](localhost/comparison_by_site.tsv),
+[segment status](localhost/segment_status.json), and
+[resolved GS inputs](localhost/ground_state.json).
+
+Localhost durable provenance:
+
+- Complete WorkChain: `86cab293-1dea-474d-b6de-7b7e033fac2f`
+- GS CalcJob: `4b2b02a1-a79b-453b-8f35-8426c325e31c`
+- Spectral WorkChain: `c773a3f2-8241-4350-8420-85ca3cac4f8e`
+- Spectral CalcJob: `2d0f839e-9544-47c2-acfb-a758149b03e1`
+- GS checkpoint SHA-256: `0599b69750513911930ebf47372e458962eec394a91c7e1b5e9c4199c875b936`
+- Final JLD2 SHA-256: `4828801afc06e8f5094d1c5fe3592e796d84bfd3576d0b52543185601b1ce188`
+- Final TSV SHA-256: `0bdacfd2bebac93a82fe3b807ba740748f19901c8f0ee708133ffa5aee187a96`
+
+## Daint durable provenance
 
 - Original full workflow: `b77905ce-9474-446a-a7f7-bd5ceb4df292`
 - GS CalcJob: `2de433a2-4bf1-47d5-bff2-51344401a84d`

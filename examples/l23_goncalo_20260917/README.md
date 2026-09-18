@@ -60,16 +60,21 @@ and supported AiiDA submission with fresh labels and appropriate limits.
 The historical source-checksum manifest mentioned by the original submitter
 belongs to that deployment; it is not the repository's checksum manifest.
 
-## Planned controlled Mac test
+## Completed localhost ARM64 test
 
-The next step is the same Mac architecture as Gonçalo's reference, recording
-the exact CPU and software versions, then comparing both implementations on
-one Mac with the **same saved GS**, parameters and explicit thread budget.
-This has **not been run yet**. No claim about Mac performance is made here.
+On 18 September 2026, the generalized engine completed the same L=23 physical
+case through a standard AiiDA WorkChain in a Linux ARM64 container on Apple
+Silicon. The test used seed 20260724, one GS process with eight threads and four
+concurrent spectral processes with two threads each. It completed all 69 tasks
+in 41 min 48 s and reproduced the supplied spectrum with a 0.1005701% relative
+L2 difference. See the [full result](../../results/L23/README.md) and the
+[localhost installation guide](../../docs/localhost.md).
 
-The numerical Julia routines are separate from the Slurm submission wrappers;
-the future Mac launcher is not implemented by this publication. Generalized
-physics inputs for the WorkChain remain a separate review with Gonçalo.
+The runs still did not share a GS checkpoint, and the reference seed remains
+unknown. This is therefore an independent reproduction, not a bitwise or
+same-GS implementation-equivalence test. The portable local launchers and
+versioned physical inputs are now implemented in the main engine; this frozen
+example directory continues to document the exact earlier Daint experiment.
 
 For now, reproduce the local data comparison and plot (no Daint job) from the
 repository root, in an environment with NumPy, h5py and Matplotlib:
