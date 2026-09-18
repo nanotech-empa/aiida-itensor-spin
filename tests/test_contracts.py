@@ -171,12 +171,17 @@ def test_complete_requires_all_manifest_tasks():
 
 
 def test_ground_state_parameters_are_explicit_and_valid():
-    assert (
-        normalize_ground_state_parameters(
-            {"length": 11, "impurity_site": 6, "seed": 20260724, "threading_mode": "blocksparse"}
-        )["length"]
-        == 11
+    normalized = normalize_ground_state_parameters(
+        {"length": 23, "impurity_site": 12, "seed": 20260724, "threading_mode": "blocksparse"}
     )
+    assert normalized["length"] == 23
+    assert normalized["model"] == "spin1_chain_spinhalf_impurity_v1"
+    assert normalized["J_meV"] == 18.4
+    assert normalized["JL_meV"] == 16.7
+    assert normalized["JR_meV"] == 51.1
+    assert normalized["dmrg_cutoff"] == 1e-8
+    assert normalized["spectral_cutoff"] == 1e-6
+    assert normalized["omega_smearing_meV"] == 1.5
     with pytest.raises(ContractError, match="cannot exceed"):
         normalize_ground_state_parameters({"length": 11, "impurity_site": 12, "seed": 20260724})
 
@@ -186,3 +191,13 @@ def test_convention_mismatch_is_rejected():
     value["chebyshev_convention"] = "revised-final-moment"
     with pytest.raises(ContractError, match="convention"):
         validate_segment_status(value, PARAMETERS)
+
+
+def test_ground_state_model_and_numerics_are_validated():
+    base = {"length": 11, "impurity_site": 6, "seed": 1}
+    with pytest.raises(ContractError, match="registered model"):
+        normalize_ground_state_parameters({**base, "model": "unknown"})
+    with pytest.raises(ContractError, match="spectral_cutoff"):
+        normalize_ground_state_parameters({**base, "spectral_cutoff": 0})
+    with pytest.raises(ContractError, match="temperature_K"):
+        normalize_ground_state_parameters({**base, "temperature_K": -1})

@@ -30,8 +30,19 @@ class GroundStateCalculation(CalcJob):
 
     def prepare_for_submission(self, folder):
         parameters = normalize_ground_state_parameters(self.inputs.parameters.get_dict())
+        resources = self.inputs.metadata.options.resources
+        threads = int(resources.get("num_cores_per_mpiproc", 1))
         with folder.open("ground_state.json", "w", encoding="utf8") as handle:
-            json.dump({"format_version": 1, "parameters": parameters}, handle, indent=2)
+            json.dump(
+                {
+                    "format_version": 1,
+                    "parameters": parameters,
+                    "execution": {"threads_per_process": threads},
+                },
+                handle,
+                indent=2,
+                sort_keys=True,
+            )
             handle.write("\n")
 
         code_info = CodeInfo()

@@ -92,6 +92,14 @@ physically as intended. The directly readable spectrum is
 complete compact JLD2 output and independent reference result are documented in
 [`results/L11/README.md`](results/L11/README.md).
 
+## Localhost ARM64 execution
+
+The same restart-safe WorkChain can run inside a Linux ARM64 AiiDAlab
+container through AiiDA's `localhost` computer. Dedicated local launchers
+replace Slurm `srun` with bounded direct Julia worker processes; the CalcJobs,
+parsers, checkpoint contract, resource planning and result collection are
+shared. See [the localhost installation and submission guide](docs/localhost.md).
+
 ## Current installation and L=11 example
 
 The validated Daint engines are isolated at:

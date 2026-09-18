@@ -141,7 +141,8 @@ required_keys = (
     "L",
     "i_imp",
     "J",
-    "Jp",
+    "JL",
+    "JR",
     "cutoff",
     "ωmax",
     "try_doubleN",
@@ -178,7 +179,7 @@ assigned_tasks = [all_tasks[task_id] for task_id in task_ids]
 
 H = checkpoint["H"]
 E0_sym = minimum(checkpoint["En_sym"])
-cutoff = checkpoint["cutoff"]
+cutoff = get(checkpoint, "spectral_cutoff", checkpoint["cutoff"])
 ωmax = checkpoint["ωmax"]
 Emax = checkpoint["Emax"]
 try_doubleN = checkpoint["try_doubleN"]
