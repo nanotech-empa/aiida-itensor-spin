@@ -17,4 +17,6 @@ and the versioned `spin1_chain_spinhalf_impurity_v1` model.
 
 The reference and this run did not share a GS checkpoint, and the reference
 seed is unknown. Treat the comparison as an independent physics reproduction,
-not a bitwise-equivalence test.
+not a bitwise-equivalence test. The parent report includes the
+[gold-standard overlay](../l23_localhost_comparison.png) and
+[numerical/timing diagnostics](../l23_localhost_diagnostics.png).

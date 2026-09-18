@@ -67,7 +67,7 @@ def main():
     axes[0, 1].legend(frameon=False, fontsize=8)
     fig.suptitle(
         f"L23: close agreement, not identical — global relative L2 difference {100 * relative_l2:.4f}%\n"
-        "Independent GS; seed not shared/controlled; different hardware. Same-Mac comparison planned.",
+        "Independent GS; reference seed unknown; different hardware. Localhost result reported separately.",
         fontsize=11,
     )
     output = result_dir / "l23_comparison.png"

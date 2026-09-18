@@ -1,0 +1,5 @@
+label	minutes	timing_scope	controlled_comparison
+Daint allocations	33.3	sum of Slurm allocations, including GS	no
+Daint end-to-end	37.75	first GS allocation start to final spectral allocation end	no
+Localhost AiiDA	41.8	complete WorkChain creation to finish	no
+Gonçalo pipeline	44.7302	reported scientific pipeline after imports	no

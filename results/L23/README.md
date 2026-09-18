@@ -126,6 +126,14 @@ This measured heterogeneity motivates a future cost-aware or dynamic task
 assignment; merely changing thread/process decomposition on the same eight
 cores cannot provide a large gain.
 
+![Localhost spectra compared with Gonçalo's gold standard](l23_localhost_comparison.png)
+
+![L23 numerical and timing diagnostics](l23_localhost_diagnostics.png)
+
+The timing bars deliberately retain their different measurement boundaries and
+are **not** presented as a controlled speedup benchmark. The underlying values
+and scope notes are stored in [timing_summary.tsv](timing_summary.tsv).
+
 Retained local outputs: [compact JLD2](localhost/chi_L23.jld2),
 [spectrum](localhost/spectrum.tsv), [task timings](localhost/task_timings.tsv),
 [comparison summary](localhost/comparison.toml),
