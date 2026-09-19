@@ -69,6 +69,47 @@ preceding segment. A valid `checkpointed` result triggers the next submission
 automatically. The workflow can also make a bounded continuation from preserved
 remote state when an execution ends unexpectedly.
 
+
+## Sector ensembles
+
+The 'itensor_spin.sector_ensemble' entry point accepts explicit integer 2Sz
+labels for the generic mixed-spin model and runs two provenance-preserving
+stages:
+
+1. one lightweight, one-node DMRG lowest-energy scan for every requested
+   sector, without the highest-energy solve or Chebyshev checkpoint;
+2. complete restartable SpinChainWorkChain spectra only for sectors whose
+   lowest energy lies within max(k_B*T/5, energy_precision_meV) of the global
+   minimum.
+
+This separation is intentional. The present spectral kernel represents
+nonnegative-frequency response from a ground-state manifold; treating arbitrary
+higher-energy fixed-Sz states as independent ground states would omit
+downward/negative-frequency transitions. Every requested scan is retained in
+sector_scan_metadata and sector_scan_summaries. The spectral_sector_plan
+CalcFunction records the global energy, tolerance, selected sectors, and reason.
+Full outputs are namespaced only for selected sectors, while sector_summary
+reports scan and spectrum state for all sectors.
+
+max_total_nodes is the global ceiling for either stage.
+max_concurrent_sectors caps fan-out. Scans need one node each; selected spectral
+WorkChains additionally respect spectral_resources.max_nodes per sector. The
+planner derives separate scan and spectral concurrency values so neither stage
+can exceed the global ceiling.
+
+The localhost acceptance WorkChain 48668d60-4f04-4a35-bf8b-ba344d14f720
+(PK 12316) scanned every sector of the antiferromagnetic spin-1/2 L=3 chain:
+E0=-1.0 meV for 2Sz=-1,+1 and E0=+0.5 meV for 2Sz=-3,+3. It selected only
+2Sz=-1,+1, completed all 9/9 spectral tasks for each, and returned 420 spectrum
+rows per sector in 3 min 8 s parent-workflow elapsed time. Spin-inversion partners had identical frequency grids and a
+maximum absolute spectral difference of 2.469136006766348e-13. The submission
+example is
+[examples/submit_mixed_l3_sector_ensemble_localhost.py](examples/submit_mixed_l3_sector_ensemble_localhost.py).
+
+The production workflow uses DMRG/MPS state preparation and Chebyshev-MPS
+spectral propagation. Exact diagonalization remains confined to independent
+small-chain validation scripts.
+
 ## Scientific correction and validation
 
 The corrected convention is `chebyshev-2n-minus-1-v2`: `N` stored Chebyshev

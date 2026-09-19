@@ -55,6 +55,8 @@ def main():
     length = int(parameters["length"])
     seed = int(parameters["seed"])
     threading_mode = parameters["threading_mode"]
+    execution = config.get("execution", {})
+    scan_only = bool(execution.get("scan_only", False))
     threads = int(os.environ.get("SLURM_CPUS_PER_TASK", "0"))
     if (
         int(os.environ.get("SLURM_NNODES", "0")) != 1
@@ -65,6 +67,8 @@ def main():
     case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))
     julia = Path(os.environ.get("ITENSOR_SPIN_JULIA", DEFAULT_JULIA))
     script, model_arguments = model_command(parameters, case_root)
+    if scan_only and model != MIXED_MODEL:
+        raise RuntimeError("sector scan mode requires the mixed-spin model")
     environment = os.environ.copy()
     environment.update(
         {
@@ -120,6 +124,8 @@ def main():
         str(parameters["omega_smearing_meV"]),
         "--try-doubleN",
         str(parameters["try_doubleN"]).lower(),
+        "--scan-only",
+        str(scan_only).lower(),
     ]
     with Path("gs-runtime-stdout.txt").open("w") as stdout, Path(
         "gs-runtime-stderr.txt"
@@ -127,11 +133,47 @@ def main():
         subprocess.run(
             command,
             check=True,
-            universal_newlines=True,
+            text=True,
             env=environment,
             stdout=stdout,
             stderr=stderr,
         )
+
+    if scan_only:
+        energy_fields = Path("gs_scan_energy.txt").read_text().split()
+        if len(energy_fields) != 3:
+            raise RuntimeError(f"invalid sector scan energy report: {energy_fields!r}")
+        reported_length = int(energy_fields[0])
+        reported_sector = int(energy_fields[1])
+        ground_energy = float(energy_fields[2])
+        if reported_length != length:
+            raise RuntimeError(
+                f"sector scan reports L={reported_length}, expected L={length}"
+            )
+        if reported_sector != int(parameters["target_twice_sz"]):
+            raise RuntimeError("sector scan reports a different target 2Sz")
+        status = {
+            "format_version": 1,
+            "state": "complete",
+            "scan_only": True,
+            "model": model,
+            "length": length,
+            "ground_states": 1,
+            "total_tasks": 0,
+            "ground_energy_meV": ground_energy,
+            "seed": seed,
+            "threading_mode": threading_mode,
+            "julia_threads": threads,
+            "elapsed_seconds": time.time() - started,
+            "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+            "site_spins": parameters["site_spins"],
+            "couplings_meV": parameters["couplings_meV"],
+            "target_twice_sz": parameters["target_twice_sz"],
+        }
+        Path("gs_status.json").write_text(
+            json.dumps(status, indent=2, sort_keys=True) + "\n"
+        )
+        return 0
 
     checkpoint = Path("gs_checkpoint.jld2")
     dimensions = Path("gs_dimensions.txt").read_text().split()
@@ -152,6 +194,7 @@ def main():
     status = {
         "format_version": 1,
         "state": "complete",
+        "scan_only": False,
         "model": model,
         "length": length,
         "ground_states": ground_states,

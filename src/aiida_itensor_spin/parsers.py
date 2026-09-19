@@ -43,7 +43,7 @@ def _validate_spectrum(retrieved) -> None:
 
 
 class GroundStateParser(Parser):
-    """Store compact GS metadata and its durable checkpoint in AiiDA."""
+    """Store a sector scan or a durable GS checkpoint with compact metadata."""
 
     def parse(self, **kwargs):
         try:
@@ -51,7 +51,8 @@ class GroundStateParser(Parser):
         except (AttributeError, KeyError):
             return self.exit_codes.ERROR_MISSING_RETRIEVED
         names = set(retrieved.base.repository.list_object_names())
-        if "gs_checkpoint.jld2" not in names:
+        scan_only = self.node.inputs.scan_only.value
+        if not scan_only and "gs_checkpoint.jld2" not in names:
             return self.exit_codes.ERROR_MISSING_CHECKPOINT
         if "gs_status.json" not in names or "gs_summary.txt" not in names:
             return self.exit_codes.ERROR_MISSING_STATUS
@@ -59,22 +60,35 @@ class GroundStateParser(Parser):
             status = _read_json(retrieved, "gs_status.json")
             if status.get("format_version") != 1 or status.get("state") != "complete":
                 raise ValueError("invalid GS status")
+            if status.get("scan_only", False) is not scan_only:
+                raise ValueError("GS scan mode differs from input")
             expected = self.node.inputs.parameters.get_dict()
             if status.get("length") != expected.get("length"):
                 raise ValueError("GS length differs from input")
             if "model" in expected and status.get("model") != expected["model"]:
                 raise ValueError("GS model differs from input")
-            validate_ground_state_energy_window(status)
-            ground_states = status.get("ground_states")
-            total_tasks = status.get("total_tasks")
+            ground_energy = status.get("ground_energy_meV")
             if (
-                isinstance(ground_states, bool)
-                or not isinstance(ground_states, int)
-                or ground_states < 1
+                isinstance(ground_energy, bool)
+                or not isinstance(ground_energy, (int, float))
+                or not math.isfinite(ground_energy)
             ):
-                raise ValueError("invalid GS ground-state count")
-            if total_tasks != 3 * status["length"] * ground_states:
-                raise ValueError("invalid GS spectral task count")
+                raise ValueError("invalid GS energy")
+            if scan_only:
+                if status.get("ground_states") != 1 or status.get("total_tasks") != 0:
+                    raise ValueError("invalid sector-scan dimensions")
+            else:
+                validate_ground_state_energy_window(status)
+                ground_states = status.get("ground_states")
+                total_tasks = status.get("total_tasks")
+                if (
+                    isinstance(ground_states, bool)
+                    or not isinstance(ground_states, int)
+                    or ground_states < 1
+                ):
+                    raise ValueError("invalid GS ground-state count")
+                if total_tasks != 3 * status["length"] * ground_states:
+                    raise ValueError("invalid GS spectral task count")
         except (
             OSError,
             UnicodeError,
@@ -84,11 +98,12 @@ class GroundStateParser(Parser):
         ):
             return self.exit_codes.ERROR_INVALID_STATUS
 
-        with retrieved.base.repository.open("gs_checkpoint.jld2", mode="rb") as handle:
-            self.out(
-                "ground_state",
-                orm.SinglefileData(file=handle, filename="gs_checkpoint.jld2"),
-            )
+        if not scan_only:
+            with retrieved.base.repository.open("gs_checkpoint.jld2", mode="rb") as handle:
+                self.out(
+                    "ground_state",
+                    orm.SinglefileData(file=handle, filename="gs_checkpoint.jld2"),
+                )
         with retrieved.base.repository.open("gs_summary.txt", mode="rb") as handle:
             self.out(
                 "ground_state_summary",

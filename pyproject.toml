@@ -20,6 +20,7 @@ dependencies = ["aiida-core>=2.8,<3"]
 
 [project.entry-points."aiida.workflows"]
 "itensor_spin.full" = "aiida_itensor_spin.workflows:SpinChainWorkChain"
+"itensor_spin.sector_ensemble" = "aiida_itensor_spin.workflows:SpinSectorEnsembleWorkChain"
 "itensor_spin.spectra" = "aiida_itensor_spin.workflows:SpinSpectraWorkChain"
 
 [tool.setuptools.packages.find]

@@ -10,7 +10,11 @@ from aiida_itensor_spin.calculations import (
     SpectralSegmentCalculation,
 )
 from aiida_itensor_spin.parsers import GroundStateParser, SpectralSegmentParser
-from aiida_itensor_spin.workflows import SpinChainWorkChain, SpinSpectraWorkChain
+from aiida_itensor_spin.workflows import (
+    SpinChainWorkChain,
+    SpinSectorEnsembleWorkChain,
+    SpinSpectraWorkChain,
+)
 
 
 def load_segment_driver():
@@ -67,12 +71,31 @@ def test_workflow_contract_is_complete_and_provenance_safe():
     assert "max_failed_segments" in full_inputs
 
 
+def test_sector_ensemble_contract_is_explicit_and_namespaced():
+    inputs = SpinSectorEnsembleWorkChain.spec().inputs
+    outputs = SpinSectorEnsembleWorkChain.spec().outputs
+
+    assert {
+        "ground_state_parameters",
+        "requested_sectors",
+        "ensemble_resources",
+        "spectral_resources",
+    }.issubset(inputs)
+    assert {"sector_plan", "spectral_sector_plan", "sector_summary"}.issubset(outputs)
+    assert outputs["sector_scan_summaries"].dynamic
+    assert outputs["sector_scan_metadata"].dynamic
+    assert outputs["sector_ground_state_summaries"].dynamic
+    assert outputs["sector_metadata"].dynamic
+    assert outputs["sector_spectra"].dynamic
+    assert SpinSectorEnsembleWorkChain.exit_codes.ERROR_INVALID_INPUT.status == 600
+    assert SpinSectorEnsembleWorkChain.exit_codes.ERROR_SECTOR_SCAN_FAILED.status == 601
+    assert SpinSectorEnsembleWorkChain.exit_codes.ERROR_SECTOR_SPECTRUM_FAILED.status == 602
+
+
 def test_segment_driver_publishes_status_before_srun():
     with open("remote/itensor-spin-segment", encoding="utf8") as handle:
         driver = handle.read()
-    initial_status = driver.index(
-        'started, "initialized"'
-    )
+    initial_status = driver.index('started, "initialized"')
     worker_srun = driver.index('"srun"', initial_status)
     assert initial_status < worker_srun
 
@@ -130,9 +153,7 @@ def test_manifest_balances_more_pending_tasks_than_workers():
         5: (50, 100),
         6: (60, 100),
     }
-    assignments, task_to_rank, summary = driver.build_task_assignments(
-        12, completed, progress, 2
-    )
+    assignments, task_to_rank, summary = driver.build_task_assignments(12, completed, progress, 2)
 
     assert set(task_to_rank) == {1, 2, 3, 4, 5, 6}
     assert all(assignments)
