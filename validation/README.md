@@ -58,6 +58,36 @@ The post-GS contract now rejects a requested `omega_max_meV` larger than the
 computed (E_{max}-E_0), before spectral resources are allocated.
 
 
+## Five-site validation
+
+The larger validation chain is
+
+```text
+site spins = [1/2, 1, 2, 1, 1/2]
+target 2Sz = 0
+full Hilbert dimension = 180
+sector dimension = 34
+```
+
+Two bond patterns were tested:
+
+- uniform antiferromagnetic `J = [10, 10, 10, 10]` meV;
+- reproducible independent uniform ±10% disorder around 10 meV, seed
+  `20260919`, giving
+  `J = [9.4142657194, 10.7302704173, 10.5088355747, 10.5660656559]` meV.
+
+The lowest ten sector energies and the highest sector energy were compared with
+dense ED. The maximum low-energy errors were $6.18\times10^{-10}$ meV
+(uniform) and $4.01\times10^{-10}$ meV (disordered); highest-energy errors
+were below $4.3\times10^{-14}$ meV.
+
+Reproduce with:
+
+```console
+python validation/compare_mixed_spin_l5.py \
+  --output validation/results/mixed_spin_L5_ed.json
+```
+
 ## Plots
 
 The validation figures are available as both PNG and vector PDF:
@@ -84,6 +114,14 @@ The validation figures are available as both PNG and vector PDF:
    [PDF](results/smallest_goncalo_L3_comparison.pdf)
 
    ![Generic model versus ED and original Gonçalo model](results/smallest_goncalo_L3_comparison.png)
+
+
+4. The L=5 uniform and bond-disordered cases versus ED:
+   [PNG](results/mixed_spin_L5_energy_comparison.png) ·
+   [PDF](results/mixed_spin_L5_energy_comparison.pdf) ·
+   [numerical report](results/mixed_spin_L5_ed.json)
+
+   ![L5 mixed-spin chains versus exact diagonalization](results/mixed_spin_L5_energy_comparison.png)
 
 The Gonçalo comparison currently covers the complete energy spectrum in the
 selected sector. A same-checkpoint or same-seed full spectral comparison with
