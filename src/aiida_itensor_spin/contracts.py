@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from pathlib import PurePosixPath
 from typing import Any
@@ -227,6 +228,56 @@ def add_discovered_task_count(
         )
     normalized["expected_total_tasks"] = total_tasks
     return normalized
+
+
+def validate_ground_state_energy_window(
+    ground_state_metadata: Mapping[str, Any],
+) -> dict[str, float] | None:
+    """Validate a post-GS spectral window when energy metadata is available.
+
+    Old checkpoints without these fields remain usable for continuation.
+    Fresh ground-state calculations publish all four values.
+    """
+    keys = {
+        "ground_energy_meV",
+        "highest_energy_meV",
+        "spectral_bandwidth_meV",
+        "omega_max_meV",
+    }
+    present = keys.intersection(ground_state_metadata)
+    if not present:
+        return None
+    if present != keys:
+        missing = sorted(keys - present)
+        raise ContractError(f"ground-state energy metadata is incomplete; missing {missing}")
+
+    values = {}
+    for key in sorted(keys):
+        value = ground_state_metadata[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ContractError(f"{key} must be a finite real number")
+        value = float(value)
+        if not math.isfinite(value):
+            raise ContractError(f"{key} must be a finite real number")
+        values[key] = value
+
+    bandwidth = values["spectral_bandwidth_meV"]
+    if bandwidth <= 0:
+        raise ContractError("spectral_bandwidth_meV must be > 0")
+    derived = values["highest_energy_meV"] - values["ground_energy_meV"]
+    if not math.isclose(bandwidth, derived, rel_tol=1e-10, abs_tol=1e-10):
+        raise ContractError("spectral bandwidth differs from highest minus ground energy")
+    omega_max = values["omega_max_meV"]
+    if omega_max <= 0:
+        raise ContractError("omega_max_meV must be > 0")
+    if omega_max > bandwidth and not math.isclose(
+        omega_max, bandwidth, rel_tol=1e-12, abs_tol=1e-12
+    ):
+        raise ContractError(
+            f"omega_max_meV={omega_max:g} exceeds the GS spectral bandwidth "
+            f"{bandwidth:g} meV"
+        )
+    return values
 
 
 def _common_ground_state_parameters(
