@@ -1,0 +1,61 @@
+{
+  "date_utc": "2026-09-19",
+  "passed": true,
+  "model": "mixed_spin_heisenberg_chain_v1",
+  "workchain": {
+    "pk": 12094,
+    "uuid": "ccd512fe-7639-4222-9075-51919c745855",
+    "state": "Finished [0]"
+  },
+  "ground_state_calcjob_pk": 12095,
+  "resource_plan_calcfunction_pk": 12101,
+  "spectral_workchain_pk": 12103,
+  "spectral_calcjob_pk": 12105,
+  "outputs": {
+    "ground_state_metadata_pk": 12100,
+    "final_status_pk": 12108,
+    "spectrum_pk": 12110,
+    "collection_report_pk": 12111,
+    "task_timings_pk": 12112
+  },
+  "ground_state": {
+    "length": 3,
+    "site_spins": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "couplings_meV": [
+      1,
+      1
+    ],
+    "target_twice_sz": 1,
+    "energy_meV": -1,
+    "highest_energy_meV": 0.5,
+    "spectral_bandwidth_meV": 1.5
+  },
+  "execution": {
+    "nodes": 1,
+    "processes_per_node": 3,
+    "threads_per_process": 2,
+    "workers": 3,
+    "tasks_per_worker": 3,
+    "completed_tasks": 9,
+    "total_tasks": 9,
+    "completed_recurrence_units": 135,
+    "total_recurrence_units": 135,
+    "segment_elapsed_seconds": 77.472469329834
+  },
+  "exact_diagonalization_comparison": {
+    "report": "mixed_spin_L3_spectrum_ed.json",
+    "poles_meV": [
+      0,
+      1,
+      1.5
+    ],
+    "exact_local_spin_sum_rule": 0.75,
+    "maximum_absolute_area_error": 0.01768540315803452,
+    "acceptance_tolerance": 0.03,
+    "passed": true
+  }
+}

@@ -13,6 +13,7 @@ from .contracts import (
     normalize_parameters,
     normalize_resource_limits,
     select_largest_feasible_layout,
+    validate_ground_state_energy_window,
     validate_segment_status,
 )
 
@@ -39,6 +40,7 @@ def derive_resource_plan(
     """Derive one provenance-recorded spectral allocation from GS and progress data."""
     try:
         metadata = ground_state_metadata.get_dict()
+        validate_ground_state_energy_window(metadata)
         parameters = add_discovered_task_count(spectral_parameters.get_dict(), metadata)
         limits = normalize_resource_limits(resource_limits.get_dict())
         completed_tasks = 0

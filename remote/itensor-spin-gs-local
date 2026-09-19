@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local-direct driver for the parameterized ground-state calculation."""
+"""Local-direct driver for registered parameterized ground-state calculations."""
 
 import hashlib
 import json
@@ -11,18 +11,48 @@ from pathlib import Path
 
 DEFAULT_CASE_ROOT = Path(__file__).resolve().parent / "engine"
 DEFAULT_JULIA = Path("/home/jovyan/opt/julia-1.12.6/bin/julia")
+LEGACY_MODEL = "spin1_chain_spinhalf_impurity_v1"
+MIXED_MODEL = "mixed_spin_heisenberg_chain_v1"
+
+
+def model_command(parameters, case_root):
+    model = parameters["model"]
+    if model == LEGACY_MODEL:
+        return case_root / "prepare_gs.jl", [
+            "--L",
+            str(parameters["length"]),
+            "--impurity-site",
+            str(parameters["impurity_site"]),
+            "--J-meV",
+            str(parameters["J_meV"]),
+            "--JL-meV",
+            str(parameters["JL_meV"]),
+            "--JR-meV",
+            str(parameters["JR_meV"]),
+        ]
+    if model == MIXED_MODEL:
+        two_spins = [round(2 * spin) for spin in parameters["site_spins"]]
+        return case_root / "prepare_mixed_spin_gs.jl", [
+            "--two-spins",
+            ",".join(str(value) for value in two_spins),
+            "--couplings-meV",
+            ",".join(str(value) for value in parameters["couplings_meV"]),
+            "--target-twice-sz",
+            str(parameters["target_twice_sz"]),
+        ]
+    raise RuntimeError(f"unsupported model: {model}")
 
 
 def main():
     if len(sys.argv) != 2:
-        raise RuntimeError("usage: itensor-spin-gs ground_state.json")
+        raise RuntimeError("usage: itensor-spin-gs-local ground_state.json")
     started = time.time()
     config = json.loads(Path(sys.argv[1]).read_text())
     if config.get("format_version") != 1:
         raise RuntimeError("unsupported GS input format")
     parameters = config["parameters"]
+    model = parameters["model"]
     length = int(parameters["length"])
-    impurity_site = int(parameters["impurity_site"])
     seed = int(parameters["seed"])
     threading_mode = parameters["threading_mode"]
     execution = config.get("execution", {})
@@ -32,6 +62,7 @@ def main():
 
     case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))
     julia = Path(os.environ.get("ITENSOR_SPIN_JULIA", DEFAULT_JULIA))
+    script, model_arguments = model_command(parameters, case_root)
     environment = os.environ.copy()
     environment.update(
         {
@@ -47,25 +78,16 @@ def main():
         str(julia),
         "--startup-file=no",
         f"--project={case_root / 'ITensor_env'}",
-        str(case_root / "prepare_gs.jl"),
+        str(script),
         "--output",
         ".",
         "--seed",
         str(seed),
-        "--L",
-        str(length),
-        "--impurity-site",
-        str(impurity_site),
         "--threading-mode",
         threading_mode,
         "--model",
-        parameters["model"],
-        "--J-meV",
-        str(parameters["J_meV"]),
-        "--JL-meV",
-        str(parameters["JL_meV"]),
-        "--JR-meV",
-        str(parameters["JR_meV"]),
+        model,
+        *model_arguments,
         "--dmrg-cutoff",
         str(parameters["dmrg_cutoff"]),
         "--spectral-cutoff",
@@ -112,14 +134,24 @@ def main():
         raise RuntimeError(f"GS dimensions report L={reported_length}, expected L={length}")
     if ground_states < 1 or total_tasks != 3 * length * ground_states:
         raise RuntimeError("GS dimensions are inconsistent with 3 * length * ground_states")
+    energy_window = Path("gs_energy_window.txt").read_text().split()
+    if len(energy_window) != 3:
+        raise RuntimeError(f"invalid GS energy window: {energy_window!r}")
+    ground_energy, highest_energy, spectral_bandwidth = map(float, energy_window)
+    if spectral_bandwidth <= 0:
+        raise RuntimeError("GS spectral bandwidth must be positive")
     digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
     status = {
         "format_version": 1,
         "state": "complete",
+        "model": model,
         "length": length,
         "ground_states": ground_states,
         "total_tasks": total_tasks,
-        "impurity_site": impurity_site,
+        "ground_energy_meV": ground_energy,
+        "highest_energy_meV": highest_energy,
+        "spectral_bandwidth_meV": spectral_bandwidth,
+        "omega_max_meV": float(parameters["omega_max_meV"]),
         "seed": seed,
         "threading_mode": threading_mode,
         "julia_threads": threads,
@@ -129,6 +161,16 @@ def main():
         "execution_environment": "localhost-direct",
         "hostname": os.uname().nodename,
     }
+    if model == LEGACY_MODEL:
+        status["impurity_site"] = int(parameters["impurity_site"])
+    else:
+        status.update(
+            {
+                "site_spins": parameters["site_spins"],
+                "couplings_meV": parameters["couplings_meV"],
+                "target_twice_sz": parameters["target_twice_sz"],
+            }
+        )
     Path("gs_status.json").write_text(json.dumps(status, indent=2, sort_keys=True) + "\n")
     return 0
 

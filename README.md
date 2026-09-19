@@ -6,6 +6,26 @@ Adaptation of the spin-chain ITensor code developed by
 Experimental, restart-safe AiiDA orchestration for the Julia/ITensor spin-chain
 spectral calculation on Daint/ALPS.
 
+## Experimental mixed-spin model
+
+A separate model adapter, `mixed_spin_heisenberg_chain_v1`, generalizes the
+nearest-neighbour isotropic Heisenberg backend to a per-site list of integer or
+half-integer spins and a per-bond list of couplings. The established
+`spin1_chain_spinhalf_impurity_v1` path remains available and is regression
+tested unchanged.
+
+Three-site tensor results agree with independent dense exact diagonalization to
+a maximum energy error of `1.53e-13 meV`, including an exact reproduction of
+the smallest Gonçalo-type `[1, 1/2, 1]` chain. A full nine-task spectral run
+also reproduces the exact Lehmann poles and spin sum rule. See
+[`validation/README.md`](validation/README.md) and the retained JSON reports
+in [`validation/results/`](validation/results/).
+
+The architecture deliberately keeps one AiiDA CalcJob/WorkChain and one code
+entry point, with versioned model-specific GS adapters behind it. This preserves
+the common checkpoint, restart, spectral-task, and collection machinery while
+allowing future Hamiltonians to be registered without adding a second workflow.
+
 ## New: L=23 comparison with Gonçalo's updated reference
 
 The [17 September L23 experiment](results/L23/README.md) completed all 69
@@ -202,23 +222,18 @@ time, and partition. Inspect any linked Dict with, for example:
 verdi data core.dict show PK
 ```
 
-## Physics inputs to review with Gonçalo
+## Physics model interface
 
-The WorkChain intentionally exposes only chain `length`, `impurity_site`, and
-random `seed` until the physical interface is agreed. The fresh L=11 test kept
-the working-case values: `J=18.4 meV`, `Jp=16.7 meV`, `T=4 K`, frequency range
-`omega_max=100 meV`, and smearing `2 meV`.
+The registered Gonçalo model exposes `length`, `impurity_site`, `J`,
+`JL`, `JR`, temperature, frequency range, and frequency smearing. The
+experimental mixed-spin model instead exposes `site_spins`,
+`couplings_meV`, and optionally `target_twice_sz`; all restart and spectral
+controls are shared.
 
-Before widening the interface, please classify the following as user physics
-inputs or expert numerical controls:
-
-- model/physics: `J`, `Jp`, temperature, frequency range, frequency smearing;
-- GS numerics: bond dimension, DMRG cutoff, energy tolerances, number of excited
-  states, and orthogonality penalty;
-- algorithm controls: double-moment construction, backend, and threading mode.
-
-After Gonçalo's review, we plan to expose the agreed physical quantities as validated WorkChain inputs while keeping numerical controls in an expert section. Larger production cases should wait for that review. The corrected spectral
-code and the restart/repartition machinery are now independently validated.
+Bond dimension, DMRG cutoffs, energy tolerances, excited-state controls, and
+Chebyshev settings remain expert numerical inputs. Additional Hamiltonians
+should be implemented as registered model adapters, not as forks of the AiiDA
+workflow.
 
 ## Legacy provenance
 

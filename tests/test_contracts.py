@@ -10,6 +10,7 @@ from aiida_itensor_spin.contracts import (
     normalize_layout,
     normalize_parameters,
     select_largest_feasible_layout,
+    validate_ground_state_energy_window,
     validate_segment_status,
 )
 
@@ -231,3 +232,21 @@ def test_mixed_spin_model_rejects_invalid_site_or_bond_data():
         normalize_ground_state_parameters({**base, "couplings_meV": [0.1]})
     with pytest.raises(ContractError, match="incompatible"):
         normalize_ground_state_parameters({**base, "target_twice_sz": 0})
+
+
+def test_post_gs_energy_window_is_validated():
+    metadata = {
+        "ground_energy_meV": -1.0,
+        "highest_energy_meV": 0.5,
+        "spectral_bandwidth_meV": 1.5,
+        "omega_max_meV": 1.5,
+    }
+    assert validate_ground_state_energy_window(metadata)["spectral_bandwidth_meV"] == 1.5
+    assert validate_ground_state_energy_window({}) is None
+
+    with pytest.raises(ContractError, match="exceeds"):
+        validate_ground_state_energy_window({**metadata, "omega_max_meV": 5.0})
+    with pytest.raises(ContractError, match="incomplete"):
+        validate_ground_state_energy_window({"spectral_bandwidth_meV": 1.5})
+    with pytest.raises(ContractError, match="highest minus ground"):
+        validate_ground_state_energy_window({**metadata, "spectral_bandwidth_meV": 1.4})

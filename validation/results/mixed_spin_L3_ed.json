@@ -1,0 +1,139 @@
+{
+  "cases": [
+    {
+      "couplings_meV": [
+        1.0,
+        1.0
+      ],
+      "elapsed_seconds": 49.98966979980469,
+      "energy_errors_meV": [
+        0.0,
+        -2.0450399326706122e-19,
+        5.551115123125783e-17
+      ],
+      "exact_energies_meV": [
+        -1.0,
+        2.045039934690096e-19,
+        0.49999999999999994
+      ],
+      "exact_highest_energy_meV": 0.49999999999999994,
+      "highest_energy_error_meV": 5.551115123125783e-17,
+      "maximum_absolute_energy_error_meV": 5.551115123125783e-17,
+      "name": "three_spin_half_equal_antiferromagnetic",
+      "passed": true,
+      "sector_dimension": 3,
+      "site_spins": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "target_twice_sz": 1,
+      "tensor_energies_meV": [
+        -1.0,
+        2.0194839173657902e-28,
+        0.5
+      ],
+      "tensor_highest_energy_meV": 0.5,
+      "tolerance_meV": 2e-08
+    },
+    {
+      "couplings_meV": [
+        16.7,
+        51.1
+      ],
+      "elapsed_seconds": 50.445738315582275,
+      "energy_errors_meV": [
+        1.4210854715202004e-14,
+        -7.105427357601002e-15,
+        3.552713678800501e-15,
+        0.0,
+        -7.105427357601002e-15
+      ],
+      "exact_energies_meV": [
+        -55.92447882910048,
+        -46.597639029103135,
+        12.697639029103144,
+        22.024478829100463,
+        33.900000000000006
+      ],
+      "exact_highest_energy_meV": 33.900000000000006,
+      "highest_energy_error_meV": 0.0,
+      "maximum_absolute_energy_error_meV": 1.4210854715202004e-14,
+      "name": "smallest_goncalo_equivalent",
+      "passed": true,
+      "sector_dimension": 5,
+      "site_spins": [
+        1.0,
+        0.5,
+        1.0
+      ],
+      "target_twice_sz": 1,
+      "tensor_energies_meV": [
+        -55.924478829100465,
+        -46.59763902910314,
+        12.697639029103147,
+        22.024478829100463,
+        33.9
+      ],
+      "tensor_highest_energy_meV": 33.900000000000006,
+      "tolerance_meV": 2e-08
+    },
+    {
+      "couplings_meV": [
+        0.35,
+        -0.6
+      ],
+      "elapsed_seconds": 50.62688994407654,
+      "energy_errors_meV": [
+        -2.220446049250313e-16,
+        0.0,
+        1.5276668818842154e-13,
+        -1.4455103780619538e-13,
+        -4.440892098500626e-16,
+        -8.43769498715119e-15
+      ],
+      "exact_energies_meV": [
+        -1.4558661591420796,
+        -1.0249999999999997,
+        0.4575906551285133,
+        0.6808661591420797,
+        1.767409344871487,
+        1.9750000000000003
+      ],
+      "exact_highest_energy_meV": 1.9750000000000003,
+      "highest_energy_error_meV": -1.5543122344752192e-15,
+      "maximum_absolute_energy_error_meV": 1.5276668818842154e-13,
+      "name": "mixed_half_one_two_competing_couplings",
+      "passed": true,
+      "sector_dimension": 6,
+      "site_spins": [
+        0.5,
+        1.0,
+        2.0
+      ],
+      "target_twice_sz": 1,
+      "tensor_energies_meV": [
+        -1.4558661591420798,
+        -1.0249999999999997,
+        0.4575906551286661,
+        0.6808661591419352,
+        1.7674093448714865,
+        1.9749999999999919
+      ],
+      "tensor_highest_energy_meV": 1.9749999999999988,
+      "tolerance_meV": 2e-08
+    }
+  ],
+  "goncalo_generic_matches_legacy": true,
+  "goncalo_legacy_reference_energies_meV": [
+    -55.92447882910047,
+    -46.59763902910314,
+    12.697639029103145,
+    22.024478829100463,
+    33.9
+  ],
+  "independent_oracle": "NumPy dense exact diagonalization",
+  "model": "mixed_spin_heisenberg_chain_v1",
+  "passed": true,
+  "suite": "mixed_spin_heisenberg_three_site_exact_diagonalization"
+}
