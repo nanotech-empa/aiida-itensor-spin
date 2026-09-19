@@ -18,6 +18,12 @@ class GroundStateCalculation(CalcJob):
     def define(cls, spec):
         super().define(spec)
         spec.input("parameters", valid_type=orm.Dict)
+        spec.input(
+            "scan_only",
+            valid_type=orm.Bool,
+            default=lambda: orm.Bool(False),
+            help="Only determine the lowest energy in one conserved-Sz sector.",
+        )
         spec.output("ground_state", valid_type=orm.SinglefileData, required=False)
         spec.output("ground_state_metadata", valid_type=orm.Dict, required=False)
         spec.output("ground_state_summary", valid_type=orm.SinglefileData, required=False)
@@ -37,7 +43,10 @@ class GroundStateCalculation(CalcJob):
                 {
                     "format_version": 1,
                     "parameters": parameters,
-                    "execution": {"threads_per_process": threads},
+                    "execution": {
+                        "threads_per_process": threads,
+                        "scan_only": self.inputs.scan_only.value,
+                    },
                 },
                 handle,
                 indent=2,
@@ -55,7 +64,9 @@ class GroundStateCalculation(CalcJob):
         calc_info = CalcInfo()
         calc_info.uuid = self.uuid
         calc_info.codes_info = [code_info]
-        calc_info.retrieve_list = ["gs_checkpoint.jld2", "gs_summary.txt", "gs_status.json"]
+        calc_info.retrieve_list = ["gs_summary.txt", "gs_status.json"]
+        if not self.inputs.scan_only.value:
+            calc_info.retrieve_list.insert(0, "gs_checkpoint.jld2")
         return calc_info
 
 

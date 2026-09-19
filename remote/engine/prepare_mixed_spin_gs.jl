@@ -91,6 +91,7 @@ tol_sym = parse(Float64, options["--symmetry-tolerance"])
 ωmax = parse(Float64, options["--omega-max-meV"])
 ω_smearing = parse(Float64, options["--omega-smearing-meV"])
 try_doubleN = parse_bool(options["--try-doubleN"], "--try-doubleN")
+scan_only = parse_bool(get(options, "--scan-only", "false"), "--scan-only")
 
 start_time = DateTime(now())
 start_wall = time()
@@ -128,6 +129,26 @@ statei = product_state_for_twice_sz(two_spins, target_twice_sz)
 
 E0, ψ0 = DMRGsweeps.DMRGmaxdim_convE(H, ψi, precE; cutoff=cutoff)
 println()
+
+if scan_only
+    S2_value = inner(ψ0', S2, ψ0)
+    S_value = (-1 + sqrt(max(0, 1 + 4 * S2_value))) / 2
+    Sz_value = inner(ψ0', Sz, ψ0)
+    write(fw, "# Sector scan only:\n")
+    write(fw, "ground energy = $E0 meV\n")
+    write(fw, "S = $S_value\n")
+    write(fw, "Sz = $Sz_value\n")
+    write(fw, "Julia threads = $(Threads.nthreads())\n")
+    write(fw, "scan seconds = $(time() - start_wall)\n")
+    close(fw)
+    scan_filename = joinpath(output_dir, "gs_scan_energy.txt")
+    open(scan_filename, "w") do scan_file
+        println(scan_file, "$L\t$target_twice_sz\t$E0")
+    end
+    println("Sector scan written to $scan_filename")
+    exit(0)
+end
+
 En = [E0]
 ψn = [ψ0]
 for _ in 1:nexc

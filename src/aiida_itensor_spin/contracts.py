@@ -274,8 +274,7 @@ def validate_ground_state_energy_window(
         omega_max, bandwidth, rel_tol=1e-12, abs_tol=1e-12
     ):
         raise ContractError(
-            f"omega_max_meV={omega_max:g} exceeds the GS spectral bandwidth "
-            f"{bandwidth:g} meV"
+            f"omega_max_meV={omega_max:g} exceeds the GS spectral bandwidth {bandwidth:g} meV"
         )
     return values
 
@@ -298,14 +297,10 @@ def _common_ground_state_parameters(
         "dmrg_cutoff": _positive_float(supplied, "dmrg_cutoff"),
         "spectral_cutoff": _positive_float(supplied, "spectral_cutoff"),
         "energy_precision_meV": _positive_float(supplied, "energy_precision_meV"),
-        "highest_energy_precision_meV": _positive_float(
-            supplied, "highest_energy_precision_meV"
-        ),
+        "highest_energy_precision_meV": _positive_float(supplied, "highest_energy_precision_meV"),
         "initial_linkdim": _integer(supplied, "initial_linkdim", minimum=1),
         "excited_states": _integer(supplied, "excited_states", minimum=0),
-        "excited_state_penalty_meV": _positive_float(
-            supplied, "excited_state_penalty_meV"
-        ),
+        "excited_state_penalty_meV": _positive_float(supplied, "excited_state_penalty_meV"),
         "temperature_K": temperature,
         "symmetry_tolerance": _positive_float(supplied, "symmetry_tolerance"),
         "omega_max_meV": _positive_float(supplied, "omega_max_meV"),
@@ -385,6 +380,76 @@ def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any
         "couplings_meV": couplings,
         "target_twice_sz": target,
         **common,
+    }
+
+
+def build_sector_ensemble_plan(
+    ground_state_parameters: Mapping[str, Any],
+    requested_sectors: list[Any],
+    spectral_resource_limits: Mapping[str, Any],
+    ensemble_resources: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate sectors and derive a conservative globally bounded execution plan.
+
+    Sectors are represented by ``2 * Sz`` so every label remains integral. The
+    current ensemble implementation is deliberately limited to Hamiltonian
+    adapters that expose an explicit conserved-Sz contract.
+    """
+    if "target_twice_sz" in ground_state_parameters:
+        raise ContractError(
+            "target_twice_sz must be supplied through requested_sectors for an ensemble"
+        )
+    normalized = normalize_ground_state_parameters(ground_state_parameters)
+    if normalized["model"] != MIXED_MODEL_IDENTIFIER:
+        raise ContractError(f"sector ensembles currently require model {MIXED_MODEL_IDENTIFIER!r}")
+    if not isinstance(requested_sectors, list) or not requested_sectors:
+        raise ContractError("requested_sectors must be a non-empty list")
+
+    total_twice_spin = sum(round(2 * spin) for spin in normalized["site_spins"])
+    allowed_sectors = list(range(-total_twice_spin, total_twice_spin + 1, 2))
+    sectors: list[int] = []
+    for value in requested_sectors:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ContractError("every requested sector must be an integer value of 2Sz")
+        if value not in allowed_sectors:
+            raise ContractError(f"requested 2Sz={value} is incompatible with the supplied spins")
+        if value in sectors:
+            raise ContractError(f"requested sector 2Sz={value} is duplicated")
+        sectors.append(value)
+    sectors.sort()
+
+    spectral_limits = normalize_resource_limits(spectral_resource_limits)
+    max_total_nodes = _integer(ensemble_resources, "max_total_nodes", minimum=1)
+    max_concurrent = _integer(ensemble_resources, "max_concurrent_sectors", minimum=1)
+    per_sector_max_nodes = min(spectral_limits["max_nodes"], max_total_nodes)
+    effective_limits = {**spectral_limits, "max_nodes": per_sector_max_nodes}
+    concurrency = min(
+        len(sectors),
+        max_concurrent,
+        max_total_nodes // per_sector_max_nodes,
+    )
+    scan_concurrency = min(len(sectors), max_concurrent, max_total_nodes)
+    if concurrency < 1:
+        raise ContractError("global node ceiling cannot accommodate one sector")
+
+    labels = [f"twice_sz_{'m' if sector < 0 else 'p'}{abs(sector)}" for sector in sectors]
+    return {
+        "state": "selected",
+        "model": normalized["model"],
+        "site_spins": normalized["site_spins"],
+        "allowed_sectors": allowed_sectors,
+        "requested_sectors": sectors,
+        "sector_labels": labels,
+        "max_total_nodes": max_total_nodes,
+        "max_concurrent_sectors": max_concurrent,
+        "scan_concurrent_sectors": scan_concurrency,
+        "concurrent_sectors": concurrency,
+        "effective_spectral_resources": effective_limits,
+        "reason": (
+            "one-node sector scans and selected spectral WorkChains are independent; "
+            "each stage is separately capped so its concurrent node ceilings cannot "
+            "exceed max_total_nodes"
+        ),
     }
 
 

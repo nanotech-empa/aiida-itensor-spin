@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from aiida import orm
 from aiida.engine import ToContext, WorkChain, calcfunction, while_
 
@@ -9,6 +11,8 @@ from .calculations import GroundStateCalculation, SpectralSegmentCalculation
 from .contracts import (
     ContractError,
     add_discovered_task_count,
+    build_sector_ensemble_plan,
+    normalize_ground_state_parameters,
     normalize_layout,
     normalize_parameters,
     normalize_resource_limits,
@@ -520,3 +524,526 @@ class SpinChainWorkChain(WorkChain):
                 f"{child.exit_status}; available restart state was preserved"
             )
             return self.exit_codes.ERROR_SPECTRA_FAILED
+
+
+@calcfunction
+def derive_sector_ensemble_plan(
+    ground_state_parameters: orm.Dict,
+    requested_sectors: orm.List,
+    spectral_resources: orm.Dict,
+    ensemble_resources: orm.Dict,
+) -> orm.Dict:
+    """Create a provenance-recorded sector and global-concurrency plan."""
+    try:
+        plan = build_sector_ensemble_plan(
+            ground_state_parameters.get_dict(),
+            requested_sectors.get_list(),
+            spectral_resources.get_dict(),
+            ensemble_resources.get_dict(),
+        )
+    except (ContractError, TypeError, ValueError) as exception:
+        plan = {"state": "rejected", "reason": str(exception)}
+    return orm.Dict(dict=plan)
+
+
+@calcfunction
+def prepare_sector_parameters(
+    ground_state_parameters: orm.Dict,
+    sector_plan: orm.Dict,
+    sector_index: orm.Int,
+) -> orm.Dict:
+    """Materialize one explicit sector input from the ensemble plan."""
+    plan = sector_plan.get_dict()
+    if plan.get("state") != "selected":
+        raise ValueError("cannot prepare parameters from a rejected sector plan")
+    index = sector_index.value
+    sectors = plan["requested_sectors"]
+    if index < 0 or index >= len(sectors):
+        raise ValueError("sector index is outside the ensemble plan")
+    parameters = ground_state_parameters.get_dict()
+    if "target_twice_sz" in parameters:
+        raise ValueError("ensemble base parameters already contain target_twice_sz")
+    parameters["target_twice_sz"] = sectors[index]
+    return orm.Dict(dict=normalize_ground_state_parameters(parameters))
+
+
+@calcfunction
+def prepare_sector_spectral_resources(sector_plan: orm.Dict) -> orm.Dict:
+    """Expose the per-sector ceiling selected under the global node limit."""
+    plan = sector_plan.get_dict()
+    if plan.get("state") != "selected":
+        raise ValueError("cannot prepare resources from a rejected sector plan")
+    return orm.Dict(dict=plan["effective_spectral_resources"])
+
+
+@calcfunction
+def select_spectral_sectors(
+    sector_plan: orm.Dict,
+    ground_state_parameters: orm.Dict,
+    **sector_scan_metadata: orm.Dict,
+) -> orm.Dict:
+    """Select the global/near-degenerate ground-state sectors for spectra."""
+    plan = sector_plan.get_dict()
+    parameters = normalize_ground_state_parameters(ground_state_parameters.get_dict())
+    scans = []
+    missing = []
+    for sector, label in zip(
+        plan.get("requested_sectors", []), plan.get("sector_labels", []), strict=True
+    ):
+        node = sector_scan_metadata.get(label)
+        if node is None:
+            missing.append(sector)
+            continue
+        metadata = node.get_dict()
+        energy = metadata.get("ground_energy_meV")
+        if (
+            metadata.get("scan_only") is not True
+            or metadata.get("target_twice_sz") != sector
+            or isinstance(energy, bool)
+            or not isinstance(energy, (int, float))
+            or not math.isfinite(energy)
+        ):
+            raise ValueError(f"invalid sector-scan metadata for {label}")
+        scans.append(
+            {
+                "target_twice_sz": sector,
+                "label": label,
+                "ground_energy_meV": float(energy),
+            }
+        )
+
+    if missing:
+        return orm.Dict(
+            dict={
+                "state": "rejected",
+                "reason": f"sector scans are missing for 2Sz={missing}",
+                "requested_sectors": plan.get("requested_sectors", []),
+                "selected_sectors": [],
+                "selected_labels": [],
+                "scans": scans,
+            }
+        )
+
+    global_energy = min(item["ground_energy_meV"] for item in scans)
+    thermal_window = 8.617333262e-2 * parameters["temperature_K"] / 5.0
+    numerical_tolerance = max(
+        parameters["energy_precision_meV"],
+        1.0e-12 * max(1.0, abs(global_energy)),
+    )
+    selection_window = max(thermal_window, numerical_tolerance)
+    selected = [
+        item
+        for item in scans
+        if item["ground_energy_meV"] - global_energy <= selection_window
+    ]
+    return orm.Dict(
+        dict={
+            "state": "selected",
+            "reason": (
+                "spectra are restricted to sectors whose lowest DMRG energy lies "
+                "within max(k_B*T/5, energy_precision) of the global minimum; "
+                "higher-energy sectors remain energy-scan results only"
+            ),
+            "requested_sectors": plan["requested_sectors"],
+            "global_ground_energy_meV": global_energy,
+            "temperature_K": parameters["temperature_K"],
+            "thermal_window_meV": thermal_window,
+            "numerical_tolerance_meV": numerical_tolerance,
+            "selection_window_meV": selection_window,
+            "selected_sectors": [item["target_twice_sz"] for item in selected],
+            "selected_labels": [item["label"] for item in selected],
+            "scans": scans,
+        }
+    )
+
+
+@calcfunction
+def collect_sector_summary(
+    sector_plan: orm.Dict,
+    spectral_sector_plan: orm.Dict,
+    **sector_metadata: orm.Dict,
+) -> orm.Dict:
+    """Collect all scan energies and the selected spectral outcomes."""
+    plan = sector_plan.get_dict()
+    selection = spectral_sector_plan.get_dict()
+    selected_labels = set(selection.get("selected_labels", []))
+    results = []
+    for sector, label in zip(
+        plan.get("requested_sectors", []), plan.get("sector_labels", []), strict=True
+    ):
+        scan_node = sector_metadata.get(f"scan_{label}")
+        spectrum_node = sector_metadata.get(f"spectrum_{label}")
+        result = {
+            "target_twice_sz": sector,
+            "label": label,
+            "spectrum_selected": label in selected_labels,
+        }
+        if scan_node is None:
+            result.update({"scan_state": "missing", "spectrum_state": "not_run"})
+        else:
+            scan = scan_node.get_dict()
+            if scan.get("target_twice_sz") != sector:
+                raise ValueError(f"scan metadata for {label} reports a different sector")
+            result.update(
+                {
+                    "scan_state": "complete",
+                    "ground_energy_meV": scan["ground_energy_meV"],
+                }
+            )
+            if label not in selected_labels:
+                result["spectrum_state"] = "not_selected"
+            elif spectrum_node is None:
+                result["spectrum_state"] = "missing"
+            else:
+                spectrum = spectrum_node.get_dict()
+                if spectrum.get("target_twice_sz") != sector:
+                    raise ValueError(
+                        f"spectral metadata for {label} reports a different sector"
+                    )
+                result.update(
+                    {
+                        "spectrum_state": "complete",
+                        "highest_energy_meV": spectrum["highest_energy_meV"],
+                        "spectral_bandwidth_meV": spectrum["spectral_bandwidth_meV"],
+                        "ground_states": spectrum["ground_states"],
+                        "total_tasks": spectrum["total_tasks"],
+                    }
+                )
+        results.append(result)
+
+    complete = (
+        selection.get("state") == "selected"
+        and all(result["scan_state"] == "complete" for result in results)
+        and all(
+            result["spectrum_state"] == "complete"
+            for result in results
+            if result["spectrum_selected"]
+        )
+    )
+    return orm.Dict(
+        dict={
+            "state": "complete" if complete else "partial",
+            "model": plan.get("model"),
+            "requested_sectors": plan.get("requested_sectors", []),
+            "selected_spectral_sectors": selection.get("selected_sectors", []),
+            "global_ground_energy_meV": selection.get("global_ground_energy_meV"),
+            "selection_window_meV": selection.get("selection_window_meV"),
+            "results": results,
+        }
+    )
+
+
+class SpinSectorEnsembleWorkChain(WorkChain):
+    """Scan fixed-Sz energies, then run spectra only for ground-state sectors."""
+
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.input("ground_state_code", valid_type=orm.AbstractCode)
+        spec.input("spectral_code", valid_type=orm.AbstractCode)
+        spec.input("ground_state_parameters", valid_type=orm.Dict)
+        spec.input("ground_state_resources", valid_type=orm.Dict)
+        spec.input("spectral_parameters", valid_type=orm.Dict)
+        spec.input("spectral_resources", valid_type=orm.Dict)
+        spec.input(
+            "requested_sectors",
+            valid_type=orm.List,
+            help="Explicit integer values of 2Sz to scan.",
+        )
+        spec.input(
+            "ensemble_resources",
+            valid_type=orm.Dict,
+            help="Global max_total_nodes and max_concurrent_sectors ceilings.",
+        )
+        spec.input("max_segments", valid_type=orm.Int, default=lambda: orm.Int(6))
+        spec.input("max_node_hours", valid_type=orm.Float, default=lambda: orm.Float(100.0))
+        spec.input("max_stalled_segments", valid_type=orm.Int, default=lambda: orm.Int(1))
+        spec.input("max_failed_segments", valid_type=orm.Int, default=lambda: orm.Int(1))
+        spec.outline(
+            cls.setup,
+            while_(cls.has_pending_scans)(cls.submit_scan_batch, cls.inspect_scan_batch),
+            cls.select_spectral_sectors,
+            while_(cls.has_pending_spectra)(
+                cls.submit_spectral_batch, cls.inspect_spectral_batch
+            ),
+            cls.finalize,
+        )
+        spec.output("sector_plan", valid_type=orm.Dict)
+        spec.output("spectral_sector_plan", valid_type=orm.Dict, required=False)
+        spec.output("sector_summary", valid_type=orm.Dict, required=False)
+        spec.output_namespace(
+            "sector_scan_summaries",
+            dynamic=True,
+            valid_type=orm.SinglefileData,
+            required=False,
+        )
+        spec.output_namespace(
+            "sector_scan_metadata", dynamic=True, valid_type=orm.Dict, required=False
+        )
+        spec.output_namespace(
+            "sector_ground_states", dynamic=True, valid_type=orm.SinglefileData, required=False
+        )
+        spec.output_namespace(
+            "sector_ground_state_summaries",
+            dynamic=True,
+            valid_type=orm.SinglefileData,
+            required=False,
+        )
+        spec.output_namespace("sector_metadata", dynamic=True, valid_type=orm.Dict, required=False)
+        spec.output_namespace(
+            "sector_spectra", dynamic=True, valid_type=orm.SinglefileData, required=False
+        )
+        spec.output_namespace(
+            "sector_collection_reports",
+            dynamic=True,
+            valid_type=orm.SinglefileData,
+            required=False,
+        )
+        spec.output_namespace(
+            "sector_task_timings", dynamic=True, valid_type=orm.SinglefileData, required=False
+        )
+        spec.exit_code(600, "ERROR_INVALID_INPUT", message="Invalid sector ensemble input.")
+        spec.exit_code(601, "ERROR_SECTOR_SCAN_FAILED", message="One or more sector scans failed.")
+        spec.exit_code(
+            602,
+            "ERROR_SECTOR_SPECTRUM_FAILED",
+            message="One or more selected sector spectra failed.",
+        )
+
+    def setup(self):
+        plan_node = derive_sector_ensemble_plan(
+            self.inputs.ground_state_parameters,
+            self.inputs.requested_sectors,
+            self.inputs.spectral_resources,
+            self.inputs.ensemble_resources,
+        )
+        self.out("sector_plan", plan_node)
+        plan = plan_node.get_dict()
+        if plan.get("state") != "selected":
+            self.report(f"invalid sector ensemble input: {plan.get('reason', 'unknown error')}")
+            return self.exit_codes.ERROR_INVALID_INPUT
+
+        try:
+            scan_layout = normalize_layout(self.inputs.ground_state_resources.get_dict())
+            if scan_layout["nodes"] != 1 or scan_layout["processes_per_node"] != 1:
+                raise ContractError("sector scans require one node and one process each")
+            if (
+                self.inputs.ground_state_code.computer.uuid
+                != self.inputs.spectral_code.computer.uuid
+            ):
+                raise ContractError("ground-state and spectral codes must use one computer")
+        except (AttributeError, ContractError, TypeError, ValueError) as exception:
+            self.report(f"invalid sector ensemble input: {exception}")
+            return self.exit_codes.ERROR_INVALID_INPUT
+
+        self.ctx.sector_plan_node = plan_node
+        self.ctx.sector_plan = plan
+        self.ctx.scan_layout = scan_layout
+        self.ctx.sector_spectral_resources = prepare_sector_spectral_resources(plan_node)
+        self.ctx.pending_scan_indices = list(range(len(plan["requested_sectors"])))
+        self.ctx.current_scan_batch = []
+        self.ctx.failed_scans = []
+        self.ctx.scan_metadata_nodes = {}
+        self.ctx.pending_spectral_indices = []
+        self.ctx.current_spectral_batch = []
+        self.ctx.failed_spectra = []
+        self.ctx.spectral_metadata_nodes = {}
+        self.report(
+            f"selected 2Sz sectors {plan['requested_sectors']}. Stage 1 will run at most "
+            f"{plan['scan_concurrent_sectors']} one-node DMRG energy scan(s) concurrently "
+            f"under the {plan['max_total_nodes']}-node global ceiling."
+        )
+
+    def has_pending_scans(self):
+        return bool(self.ctx.pending_scan_indices)
+
+    def submit_scan_batch(self):
+        width = self.ctx.sector_plan["scan_concurrent_sectors"]
+        indices = self.ctx.pending_scan_indices[:width]
+        self.ctx.pending_scan_indices = self.ctx.pending_scan_indices[width:]
+        self.ctx.current_scan_batch = []
+        futures = {}
+        layout = self.ctx.scan_layout
+        for index in indices:
+            sector = self.ctx.sector_plan["requested_sectors"][index]
+            label = self.ctx.sector_plan["sector_labels"][index]
+            parameters = prepare_sector_parameters(
+                self.inputs.ground_state_parameters,
+                self.ctx.sector_plan_node,
+                orm.Int(index),
+            )
+            future = self.submit(
+                GroundStateCalculation,
+                code=self.inputs.ground_state_code,
+                parameters=parameters,
+                scan_only=orm.Bool(True),
+                metadata={
+                    "label": f"ITensor sector scan 2Sz={sector}",
+                    "options": {
+                        "resources": {
+                            "num_machines": 1,
+                            "num_mpiprocs_per_machine": 1,
+                            "num_cores_per_mpiproc": layout["threads_per_process"],
+                        },
+                        "max_wallclock_seconds": layout["wallclock_seconds"],
+                        "queue_name": layout["partition"],
+                        "withmpi": False,
+                    },
+                },
+            )
+            context_key = f"scan_child_{index}"
+            futures[context_key] = future
+            self.ctx.current_scan_batch.append((index, sector, label, context_key))
+            self.report(f"submitted energy scan for 2Sz={sector} CalcJob<{future.pk}>")
+        return ToContext(**futures)
+
+    def inspect_scan_batch(self):
+        for _index, sector, label, context_key in self.ctx.current_scan_batch:
+            child = self.ctx[context_key]
+            if "ground_state_summary" in child.outputs:
+                self.out(
+                    f"sector_scan_summaries.{label}",
+                    child.outputs.ground_state_summary,
+                )
+            if "ground_state_metadata" in child.outputs:
+                self.out(
+                    f"sector_scan_metadata.{label}",
+                    child.outputs.ground_state_metadata,
+                )
+            if child.is_finished_ok and "ground_state_metadata" in child.outputs:
+                self.ctx.scan_metadata_nodes[label] = child.outputs.ground_state_metadata
+                self.report(f"energy scan for 2Sz={sector} completed")
+            else:
+                self.ctx.failed_scans.append(sector)
+                self.report(
+                    f"energy scan for 2Sz={sector} CalcJob<{child.pk}> failed with "
+                    f"exit status {child.exit_status}"
+                )
+
+    def select_spectral_sectors(self):
+        selection = select_spectral_sectors(
+            self.ctx.sector_plan_node,
+            self.inputs.ground_state_parameters,
+            **self.ctx.scan_metadata_nodes,
+        )
+        self.out("spectral_sector_plan", selection)
+        self.ctx.spectral_sector_plan = selection
+        selected = selection.get_dict()
+        if selected.get("state") != "selected":
+            summary_inputs = {
+                f"scan_{label}": node
+                for label, node in self.ctx.scan_metadata_nodes.items()
+            }
+            self.out(
+                "sector_summary",
+                collect_sector_summary(
+                    self.ctx.sector_plan_node,
+                    selection,
+                    **summary_inputs,
+                ),
+            )
+            self.report(selected.get("reason", "sector selection failed"))
+            return self.exit_codes.ERROR_SECTOR_SCAN_FAILED
+
+        label_to_index = {
+            label: index
+            for index, label in enumerate(self.ctx.sector_plan["sector_labels"])
+        }
+        self.ctx.pending_spectral_indices = [
+            label_to_index[label] for label in selected["selected_labels"]
+        ]
+        self.report(
+            f"sector scans found global E0={selected['global_ground_energy_meV']:.12g} meV. "
+            f"Using a {selected['selection_window_meV']:.6g} meV ground/thermal "
+            f"window, full spectra will run only for 2Sz={selected['selected_sectors']}. "
+            f"Reason: {selected['reason']}."
+        )
+
+    def has_pending_spectra(self):
+        return bool(self.ctx.pending_spectral_indices)
+
+    def submit_spectral_batch(self):
+        width = self.ctx.sector_plan["concurrent_sectors"]
+        indices = self.ctx.pending_spectral_indices[:width]
+        self.ctx.pending_spectral_indices = self.ctx.pending_spectral_indices[width:]
+        self.ctx.current_spectral_batch = []
+        futures = {}
+        for index in indices:
+            sector = self.ctx.sector_plan["requested_sectors"][index]
+            label = self.ctx.sector_plan["sector_labels"][index]
+            parameters = prepare_sector_parameters(
+                self.inputs.ground_state_parameters,
+                self.ctx.sector_plan_node,
+                orm.Int(index),
+            )
+            future = self.submit(
+                SpinChainWorkChain,
+                ground_state_code=self.inputs.ground_state_code,
+                spectral_code=self.inputs.spectral_code,
+                ground_state_parameters=parameters,
+                ground_state_resources=self.inputs.ground_state_resources,
+                spectral_parameters=self.inputs.spectral_parameters,
+                spectral_resources=self.ctx.sector_spectral_resources,
+                max_segments=self.inputs.max_segments,
+                max_node_hours=self.inputs.max_node_hours,
+                max_stalled_segments=self.inputs.max_stalled_segments,
+                max_failed_segments=self.inputs.max_failed_segments,
+                metadata={
+                    "label": f"ITensor selected sector 2Sz={sector}",
+                    "description": (
+                        "Full spectrum for a sector selected by the ensemble energy scan."
+                    ),
+                },
+            )
+            context_key = f"spectrum_child_{index}"
+            futures[context_key] = future
+            self.ctx.current_spectral_batch.append((index, sector, label, context_key))
+            self.report(f"submitted selected 2Sz={sector} WorkChain<{future.pk}>")
+        return ToContext(**futures)
+
+    def inspect_spectral_batch(self):
+        for _index, sector, label, context_key in self.ctx.current_spectral_batch:
+            child = self.ctx[context_key]
+            output_map = (
+                ("ground_state", "sector_ground_states"),
+                ("ground_state_summary", "sector_ground_state_summaries"),
+                ("ground_state_metadata", "sector_metadata"),
+                ("spectrum", "sector_spectra"),
+                ("collection_report", "sector_collection_reports"),
+                ("task_timings", "sector_task_timings"),
+            )
+            for child_label, namespace in output_map:
+                if child_label in child.outputs:
+                    self.out(f"{namespace}.{label}", child.outputs[child_label])
+            if child.is_finished_ok and "ground_state_metadata" in child.outputs:
+                self.ctx.spectral_metadata_nodes[label] = child.outputs.ground_state_metadata
+                self.report(f"selected spectrum for 2Sz={sector} completed successfully")
+            else:
+                self.ctx.failed_spectra.append(sector)
+                self.report(
+                    f"selected spectrum for 2Sz={sector} WorkChain<{child.pk}> failed "
+                    f"with exit status {child.exit_status}"
+                )
+
+    def finalize(self):
+        summary_inputs = {
+            f"scan_{label}": node for label, node in self.ctx.scan_metadata_nodes.items()
+        }
+        summary_inputs.update(
+            {
+                f"spectrum_{label}": node
+                for label, node in self.ctx.spectral_metadata_nodes.items()
+            }
+        )
+        self.out(
+            "sector_summary",
+            collect_sector_summary(
+                self.ctx.sector_plan_node,
+                self.ctx.spectral_sector_plan,
+                **summary_inputs,
+            ),
+        )
+        if self.ctx.failed_spectra:
+            self.report(f"failed selected spectra for 2Sz={self.ctx.failed_spectra}")
+            return self.exit_codes.ERROR_SECTOR_SPECTRUM_FAILED
+        return None
