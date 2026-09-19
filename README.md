@@ -21,6 +21,11 @@ also reproduces the exact Lehmann poles and spin sum rule. See
 [`validation/README.md`](validation/README.md) and the retained JSON reports
 in [`validation/results/`](validation/results/).
 
+
+Direct figures: [generic energies versus ED](validation/results/mixed_spin_L3_energy_comparison.png),
+[AiiDA spectrum versus exact poles](validation/results/mixed_spin_L3_spectrum_comparison.png), and
+[generic versus original Gonçalo model](validation/results/smallest_goncalo_L3_comparison.png).
+
 The architecture deliberately keeps one AiiDA CalcJob/WorkChain and one code
 entry point, with versioned model-specific GS adapters behind it. This preserves
 the common checkpoint, restart, spectral-task, and collection machinery while

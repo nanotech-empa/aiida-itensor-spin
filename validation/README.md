@@ -57,6 +57,38 @@ broadened areas within 0.018 (acceptance tolerance 0.03).
 The post-GS contract now rejects a requested `omega_max_meV` larger than the
 computed (E_{max}-E_0), before spectral resources are allocated.
 
+
+## Plots
+
+The validation figures are available as both PNG and vector PDF:
+
+1. All three generic short-chain energy spectra versus exact diagonalization,
+   including signed residuals:
+   [PNG](results/mixed_spin_L3_energy_comparison.png) ·
+   [PDF](results/mixed_spin_L3_energy_comparison.pdf)
+
+   ![Mixed-spin energies versus exact diagonalization](results/mixed_spin_L3_energy_comparison.png)
+
+2. The complete AiiDA/ITensor spectrum for the three-spin-1/2 chain versus
+   exact Lehmann pole positions and weights:
+   [PNG](results/mixed_spin_L3_spectrum_comparison.png) ·
+   [PDF](results/mixed_spin_L3_spectrum_comparison.pdf) ·
+   [raw AiiDA spectrum](results/mixed_spin_L3_aiida_spectrum.tsv)
+
+   ![AiiDA tensor spectrum versus exact Lehmann poles](results/mixed_spin_L3_spectrum_comparison.png)
+
+3. The smallest Gonçalo-type chain as a three-way energy comparison: exact
+   diagonalization, the original Gonçalo model adapter, and the new generic
+   mixed-spin adapter:
+   [PNG](results/smallest_goncalo_L3_comparison.png) ·
+   [PDF](results/smallest_goncalo_L3_comparison.pdf)
+
+   ![Generic model versus ED and original Gonçalo model](results/smallest_goncalo_L3_comparison.png)
+
+The Gonçalo comparison currently covers the complete energy spectrum in the
+selected sector. A same-checkpoint or same-seed full spectral comparison with
+the original Gonçalo adapter would be a separate controlled calculation.
+
 ## AiiDA acceptance
 
 On 2026-09-19, `SpinChainWorkChain<12094>`
