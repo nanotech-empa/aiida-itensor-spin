@@ -201,3 +201,33 @@ def test_ground_state_model_and_numerics_are_validated():
         normalize_ground_state_parameters({**base, "spectral_cutoff": 0})
     with pytest.raises(ContractError, match="temperature_K"):
         normalize_ground_state_parameters({**base, "temperature_K": -1})
+
+
+def test_mixed_spin_model_parameters_are_normalized():
+    normalized = normalize_ground_state_parameters(
+        {
+            "model": "mixed_spin_heisenberg_chain_v1",
+            "site_spins": [0.5, 1, 2.0],
+            "couplings_meV": [0.1, -0.25],
+            "seed": 7,
+        }
+    )
+    assert normalized["length"] == 3
+    assert normalized["site_spins"] == [0.5, 1.0, 2.0]
+    assert normalized["target_twice_sz"] == 1
+    assert normalized["couplings_meV"] == [0.1, -0.25]
+
+
+def test_mixed_spin_model_rejects_invalid_site_or_bond_data():
+    base = {
+        "model": "mixed_spin_heisenberg_chain_v1",
+        "site_spins": [0.5, 1, 2],
+        "couplings_meV": [0.1, 0.2],
+        "seed": 7,
+    }
+    with pytest.raises(ContractError, match="half-integer"):
+        normalize_ground_state_parameters({**base, "site_spins": [0.5, 0.7, 2]})
+    with pytest.raises(ContractError, match="nearest-neighbour"):
+        normalize_ground_state_parameters({**base, "couplings_meV": [0.1]})
+    with pytest.raises(ContractError, match="incompatible"):
+        normalize_ground_state_parameters({**base, "target_twice_sz": 0})

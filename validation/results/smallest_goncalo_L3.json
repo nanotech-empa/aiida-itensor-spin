@@ -1,0 +1,49 @@
+{
+  "bonds": [
+    {
+      "J_meV": 16.7,
+      "i": 1,
+      "j": 2
+    },
+    {
+      "J_meV": 51.1,
+      "i": 2,
+      "j": 3
+    }
+  ],
+  "case": "smallest_goncalo_impurity_L3",
+  "energy_errors_meV": [
+    7.105427357601002e-15,
+    -7.105427357601002e-15,
+    1.7763568394002505e-15,
+    0.0,
+    -7.105427357601002e-15
+  ],
+  "exact_energies_meV": [
+    -55.92447882910048,
+    -46.597639029103135,
+    12.697639029103144,
+    22.024478829100463,
+    33.900000000000006
+  ],
+  "exact_highest_energy_meV": 33.900000000000006,
+  "highest_energy_error_meV": 0.0,
+  "maximum_absolute_energy_error_meV": 7.105427357601002e-15,
+  "model": "spin1_chain_spinhalf_impurity_v1",
+  "passed": true,
+  "site_spins": [
+    1.0,
+    0.5,
+    1.0
+  ],
+  "tensor_energies_meV": [
+    -55.92447882910047,
+    -46.59763902910314,
+    12.697639029103145,
+    22.024478829100463,
+    33.9
+  ],
+  "tensor_highest_energy_meV": 33.900000000000006,
+  "tolerance_meV": 2e-08,
+  "total_twice_sz": 1
+}
