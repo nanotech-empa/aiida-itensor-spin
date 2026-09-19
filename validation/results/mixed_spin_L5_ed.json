@@ -1,0 +1,143 @@
+{
+  "cases": [
+    {
+      "compared_low_energy_states": 10,
+      "couplings_meV": [
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "elapsed_seconds": 75.39598321914673,
+      "exact_bandwidth_meV": 118.98034030114798,
+      "exact_highest_energy_meV": 49.999999999999986,
+      "exact_low_energies_meV": [
+        -68.98034030114799,
+        -61.3745860881769,
+        -54.999999999999964,
+        -52.49660454557667,
+        -51.70423808624174,
+        -49.016973632184914,
+        -37.117710045938814,
+        -35.65343681875998,
+        -31.440363428137903,
+        -31.03247402023036
+      ],
+      "full_hilbert_dimension": 180,
+      "highest_energy_error_meV": 2.842170943040401e-14,
+      "low_energy_errors_meV": [
+        2.842170943040401e-14,
+        2.1316282072803006e-14,
+        8.732570222491631e-12,
+        1.0844303233170649e-10,
+        -4.7194248509185854e-11,
+        -5.686473514288082e-11,
+        1.752127332110831e-10,
+        -1.581810238349135e-10,
+        6.179341482948075e-10,
+        -5.637588174067787e-10
+      ],
+      "maximum_absolute_low_energy_error_meV": 6.179341482948075e-10,
+      "name": "L5_uniform_J10",
+      "noise": null,
+      "passed": true,
+      "sector_dimension": 34,
+      "site_spins": [
+        0.5,
+        1.0,
+        2.0,
+        1.0,
+        0.5
+      ],
+      "target_twice_sz": 0,
+      "tensor_highest_energy_meV": 50.000000000000014,
+      "tensor_low_energies_meV": [
+        -68.98034030114796,
+        -61.374586088176876,
+        -54.99999999999123,
+        -52.49660454546823,
+        -51.70423808628893,
+        -49.01697363224178,
+        -37.1177100457636,
+        -35.65343681891816,
+        -31.44036342751997,
+        -31.03247402079412
+      ],
+      "tolerance_meV": 2e-07
+    },
+    {
+      "compared_low_energy_states": 10,
+      "couplings_meV": [
+        9.414265719353738,
+        10.73027041731045,
+        10.508835574657653,
+        10.566065655857301
+      ],
+      "elapsed_seconds": 74.21449780464172,
+      "exact_bandwidth_meV": 124.8316892729569,
+      "exact_highest_energy_meV": 52.468377671541745,
+      "exact_low_energies_meV": [
+        -72.36331160141515,
+        -65.12057088302866,
+        -58.00656333792982,
+        -55.300373800037875,
+        -54.77205508571277,
+        -52.03839564663801,
+        -38.84936810717501,
+        -37.84867735696317,
+        -33.327153852597036,
+        -32.653333421667774
+      ],
+      "full_hilbert_dimension": 180,
+      "highest_energy_error_meV": -4.263256414560601e-14,
+      "low_energy_errors_meV": [
+        1.4210854715202004e-14,
+        -1.4210854715202004e-14,
+        1.0679457318474306e-11,
+        2.2635049390373752e-10,
+        -1.623448042664677e-10,
+        -6.02611294198141e-11,
+        2.892335260185064e-10,
+        -2.7754509801525273e-10,
+        4.005471510026837e-10,
+        -3.367333079040691e-10
+      ],
+      "maximum_absolute_low_energy_error_meV": 4.005471510026837e-10,
+      "name": "L5_J10_uniform_noise_10pct",
+      "noise": {
+        "distribution": "independent uniform",
+        "half_width_meV": 1.0,
+        "relative_half_width": 0.1,
+        "seed": 20260919
+      },
+      "passed": true,
+      "sector_dimension": 34,
+      "site_spins": [
+        0.5,
+        1.0,
+        2.0,
+        1.0,
+        0.5
+      ],
+      "target_twice_sz": 0,
+      "tensor_highest_energy_meV": 52.4683776715417,
+      "tensor_low_energies_meV": [
+        -72.36331160141513,
+        -65.12057088302868,
+        -58.00656333791914,
+        -55.300373799811524,
+        -54.77205508587512,
+        -52.03839564669827,
+        -38.84936810688578,
+        -37.84867735724072,
+        -33.32715385219649,
+        -32.65333342200451
+      ],
+      "tolerance_meV": 2e-07
+    }
+  ],
+  "model": "mixed_spin_heisenberg_chain_v1",
+  "passed": true,
+  "suite": "mixed_spin_heisenberg_L5_exact_diagonalization",
+  "validation_scope": "lowest ten energies and the highest energy in the conserved 2Sz=0 sector"
+}

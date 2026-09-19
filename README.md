@@ -26,6 +26,12 @@ Direct figures: [generic energies versus ED](validation/results/mixed_spin_L3_en
 [AiiDA spectrum versus exact poles](validation/results/mixed_spin_L3_spectrum_comparison.png), and
 [generic versus original Gonçalo model](validation/results/smallest_goncalo_L3_comparison.png).
 
+
+A five-site `[1/2,1,2,1,1/2]` chain was also validated for uniform 10 meV
+bonds and reproducible ±10% bond disorder. The lowest ten and highest sector
+energies agree with ED to better than `6.2e-10 meV`.
+[See the L=5 comparison plot](validation/results/mixed_spin_L5_energy_comparison.png).
+
 The architecture deliberately keeps one AiiDA CalcJob/WorkChain and one code
 entry point, with versioned model-specific GS adapters behind it. This preserves
 the common checkpoint, restart, spectral-task, and collection machinery while
@@ -166,7 +172,6 @@ pip install -e .
 pytest -q tests
 pip check
 ```
-
 
 ### Validated end-to-end AiiDA run
 
