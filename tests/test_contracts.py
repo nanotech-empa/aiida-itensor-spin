@@ -85,6 +85,14 @@ def test_parameters_require_corrected_chebyshev_convention():
         )
 
 
+def test_spectral_cutoff_override_is_validated_and_preserved():
+    normalized = normalize_parameters({**PARAMETERS, "spectral_cutoff": 1e-8})
+    assert normalized["spectral_cutoff"] == 1e-8
+
+    with pytest.raises(ContractError, match="spectral_cutoff"):
+        normalize_parameters({**PARAMETERS, "spectral_cutoff": 0})
+
+
 def test_task_count_is_discovered_from_ground_state_metadata():
     parameters = dict(PARAMETERS)
     parameters.pop("expected_total_tasks")

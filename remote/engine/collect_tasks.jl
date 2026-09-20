@@ -44,10 +44,18 @@ threading_mode in ("outer", "blocksparse") ||
 reference_filename = get(options, "--reference", "")
 reference_tolerance =
     parse(Float64, get(options, "--reference-tolerance", "1e-10"))
+spectral_cutoff_override =
+    haskey(options, "--spectral-cutoff") ?
+    parse(Float64, options["--spectral-cutoff"]) : nothing
+spectral_cutoff_override === nothing || spectral_cutoff_override > 0 ||
+    error("--spectral-cutoff must be positive")
 mkpath(output_dir)
 
 checkpoint_hash = bytes2hex(open(sha256, checkpoint_filename))
 checkpoint = load(checkpoint_filename)
+checkpoint_cutoff = get(checkpoint, "spectral_cutoff", checkpoint["cutoff"])
+spectral_cutoff = spectral_cutoff_override === nothing ?
+    checkpoint_cutoff : spectral_cutoff_override
 L = checkpoint["L"]
 length(checkpoint["sites"]) == L ||
     error("Checkpoint inconsistency: L=$L but length(sites) differs")
@@ -83,6 +91,9 @@ for filename in task_files
         error("Unexpected threading mode in $filename: $(data["threading_mode"])")
     data["checkpoint_hash"] == checkpoint_hash ||
         error("Checkpoint hash mismatch in $filename")
+    task_cutoff = get(data, "spectral_cutoff", checkpoint_cutoff)
+    task_cutoff == spectral_cutoff ||
+        error("Spectral-cutoff mismatch in $filename: $task_cutoff")
     data["L"] == L || error("L mismatch in $filename")
     data["nstates"] == nstates || error("State-count mismatch in $filename")
 
@@ -176,6 +187,7 @@ jldsave(
     seed,
     checkpoint_filename,
     checkpoint_hash,
+    spectral_cutoff,
     task_rows,
     backend,
     threading_mode,
@@ -249,6 +261,7 @@ open(joinpath(output_dir, "collection_report.txt"), "w") do io
     write(io, "collected tasks = $(length(task_files))\n")
     write(io, "checkpoint = $checkpoint_filename\n")
     write(io, "checkpoint sha256 = $checkpoint_hash\n")
+    write(io, "spectral cutoff = $spectral_cutoff\n")
     if reference_max_abs_difference !== nothing
         write(io, "reference = $reference_filename\n")
         write(

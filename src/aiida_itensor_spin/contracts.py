@@ -187,6 +187,11 @@ def normalize_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
     heartbeat_every = (
         _integer(value, "heartbeat_every", minimum=1) if "heartbeat_every" in value else 1
     )
+    spectral_cutoff = (
+        _positive_float(value, "spectral_cutoff")
+        if "spectral_cutoff" in value
+        else None
+    )
     checkpoint_name = safe_relative_path(
         str(value.get("ground_state_filename", "gs_checkpoint.jld2")),
         label="ground_state_filename",
@@ -202,6 +207,8 @@ def normalize_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
             "heartbeat_every": heartbeat_every,
         }
     )
+    if "spectral_cutoff" in value:
+        result["spectral_cutoff"] = spectral_cutoff
     if "expected_total_tasks" in value:
         result["expected_total_tasks"] = _integer(value, "expected_total_tasks", minimum=1)
     return result
