@@ -160,3 +160,23 @@ def test_manifest_balances_more_pending_tasks_than_workers():
     assert summary["maximum_tasks_per_worker"] == 3
     assert summary["maximum_estimated_recurrence_units"] == 200
     assert summary["minimum_estimated_recurrence_units"] == 190
+
+
+def test_spectral_cutoff_override_reaches_worker_and_collector():
+    with open("remote/itensor-spin-segment", encoding="utf8") as handle:
+        driver = handle.read()
+    with open("remote/run_segment_rank.sh", encoding="utf8") as handle:
+        launcher = handle.read()
+    with open("remote/engine/chi_single_task_checkpoint.jl", encoding="utf8") as handle:
+        worker = handle.read()
+    with open("remote/engine/collect_tasks.jl", encoding="utf8") as handle:
+        collector = handle.read()
+
+    assert '"ITENSOR_SPIN_SPECTRAL_CUTOFF"' in driver
+    assert 'collector_command.extend(["--spectral-cutoff"' in driver
+    assert "ITENSOR_SPIN_SPECTRAL_CUTOFF" in launcher
+    assert '--spectral-cutoff "${SPECTRAL_CUTOFF}"' in launcher
+    assert 'haskey(options, "--spectral-cutoff")' in worker
+    assert "spectral_cutoff=cutoff" in worker
+    assert 'haskey(options, "--spectral-cutoff")' in collector
+    assert 'write(io, "spectral cutoff = $spectral_cutoff' in collector

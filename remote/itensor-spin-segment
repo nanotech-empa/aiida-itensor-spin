@@ -324,6 +324,15 @@ def main():
     threading_mode = parameters["threading_mode"]
     checkpoint_every = integer(parameters, "checkpoint_every", 1)
     heartbeat_every = integer(parameters, "heartbeat_every", 1)
+    spectral_cutoff = parameters.get("spectral_cutoff")
+    if spectral_cutoff is not None:
+        if (
+            isinstance(spectral_cutoff, bool)
+            or not isinstance(spectral_cutoff, (int, float))
+            or spectral_cutoff <= 0
+        ):
+            fail("spectral_cutoff must be a positive number")
+        spectral_cutoff = float(spectral_cutoff)
     stop_after_n = int(layout.get("stop_after_n", 0))
     environment = os.environ.copy()
     environment.update(
@@ -339,6 +348,8 @@ def main():
             "ITENSOR_SPIN_MANIFEST_ROOT": str(manifest_root.resolve()),
         }
     )
+    if spectral_cutoff is not None:
+        environment["ITENSOR_SPIN_SPECTRAL_CUTOFF"] = str(spectral_cutoff)
     if initial_progress[1] < total_tasks:
         run(
             [
@@ -375,35 +386,36 @@ def main():
     complete = completed_tasks == total_tasks
 
     if complete:
-        run(
-            [
-                "srun",
-                "--exclusive",
-                "--exact",
-                "--nodes=1",
-                "--ntasks=1",
-                "--cpus-per-task=1",
-                "--cpu-bind=cores",
-                "env",
-                "JULIA_NUM_THREADS=1,0",
-                str(julia),
-                "--startup-file=no",
-                f"--project={case_root / 'ITensor_env'}",
-                str(case_root / "collect_tasks.jl"),
-                "--input-root",
-                str(worker_root),
-                "--output",
-                str(merged_root),
-                "--checkpoint",
-                str(checkpoint),
-                "--backend",
-                backend,
-                "--threading-mode",
-                threading_mode,
-                "--reference-tolerance",
-                "1e-10",
-            ]
-        )
+        collector_command = [
+            "srun",
+            "--exclusive",
+            "--exact",
+            "--nodes=1",
+            "--ntasks=1",
+            "--cpus-per-task=1",
+            "--cpu-bind=cores",
+            "env",
+            "JULIA_NUM_THREADS=1,0",
+            str(julia),
+            "--startup-file=no",
+            f"--project={case_root / 'ITensor_env'}",
+            str(case_root / "collect_tasks.jl"),
+            "--input-root",
+            str(worker_root),
+            "--output",
+            str(merged_root),
+            "--checkpoint",
+            str(checkpoint),
+            "--backend",
+            backend,
+            "--threading-mode",
+            threading_mode,
+            "--reference-tolerance",
+            "1e-10",
+        ]
+        if spectral_cutoff is not None:
+            collector_command.extend(["--spectral-cutoff", str(spectral_cutoff)])
+        run(collector_command)
         for filename in ("spectrum.tsv", "collection_report.txt", "task_timings.tsv"):
             source = merged_root / filename
             source.is_file() or fail(f"collector did not create {filename}")
