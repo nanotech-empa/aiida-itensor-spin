@@ -162,3 +162,29 @@ class SpectralSegmentParser(Parser):
                 ) as handle:
                     self.out(label, orm.SinglefileData(file=handle, filename=filename))
         return None
+
+
+class SpectralInventoryParser(Parser):
+    """Parse a provenance-recorded inventory of an immutable restart folder."""
+
+    def parse(self, **kwargs):
+        try:
+            retrieved = self.retrieved
+        except (AttributeError, KeyError):
+            return self.exit_codes.ERROR_MISSING_RETRIEVED
+        names = set(retrieved.base.repository.list_object_names())
+        if not {"inventory_status.json", "inventory_summary.json"}.issubset(names):
+            return self.exit_codes.ERROR_MISSING_STATUS
+        try:
+            status = validate_segment_status(
+                _read_json(retrieved, "inventory_status.json"),
+                self.node.inputs.parameters.get_dict(),
+            )
+            summary = _read_json(retrieved, "inventory_summary.json")
+            if summary.get("format_version") != 1 or summary.get("phase") != "inventory":
+                raise ValueError("invalid inventory summary")
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError, ContractError):
+            return self.exit_codes.ERROR_INVALID_STATUS
+        self.out("segment_status", orm.Dict(dict=status))
+        self.out("inventory_summary", orm.Dict(dict=summary))
+        return None

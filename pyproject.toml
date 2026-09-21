@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiida-itensor-spin"
-version = "0.4.0.dev0"
+version = "0.4.2.dev0"
 description = "Restart-safe AiiDA workflows for Julia/ITensor spin spectra"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,15 +13,18 @@ dependencies = ["aiida-core>=2.8,<3"]
 [project.entry-points."aiida.calculations"]
 "itensor_spin.ground_state" = "aiida_itensor_spin.calculations:GroundStateCalculation"
 "itensor_spin.spectral_segment" = "aiida_itensor_spin.calculations:SpectralSegmentCalculation"
+"itensor_spin.spectral_inventory" = "aiida_itensor_spin.calculations:SpectralInventoryCalculation"
 
 [project.entry-points."aiida.parsers"]
 "itensor_spin.ground_state" = "aiida_itensor_spin.parsers:GroundStateParser"
 "itensor_spin.spectral_segment" = "aiida_itensor_spin.parsers:SpectralSegmentParser"
+"itensor_spin.spectral_inventory" = "aiida_itensor_spin.parsers:SpectralInventoryParser"
 
 [project.entry-points."aiida.workflows"]
 "itensor_spin.full" = "aiida_itensor_spin.workflows:SpinChainWorkChain"
 "itensor_spin.sector_ensemble" = "aiida_itensor_spin.workflows:SpinSectorEnsembleWorkChain"
 "itensor_spin.spectra" = "aiida_itensor_spin.workflows:SpinSpectraWorkChain"
+"itensor_spin.spectra_restart" = "aiida_itensor_spin.workflows:SpinSpectraRestartWorkChain"
 
 [tool.setuptools.packages.find]
 where = ["src"]
