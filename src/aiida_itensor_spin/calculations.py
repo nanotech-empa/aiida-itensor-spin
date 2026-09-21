@@ -176,3 +176,71 @@ class SpectralSegmentCalculation(CalcJob):
             "compact_result",
         ]
         return calc_info
+
+
+class SpectralInventoryCalculation(CalcJob):
+    """Inventory checkpoint progress in an immutable spectral RemoteData folder."""
+
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.input("ground_state", valid_type=orm.SinglefileData)
+        spec.input("parent_folder", valid_type=orm.RemoteData)
+        spec.input("parameters", valid_type=orm.Dict)
+        spec.input("segment_index", valid_type=orm.Int, default=lambda: orm.Int(0))
+        spec.output("segment_status", valid_type=orm.Dict)
+        spec.output("inventory_summary", valid_type=orm.Dict)
+        spec.exit_code(320, "ERROR_MISSING_RETRIEVED", message="No retrieved folder found.")
+        spec.exit_code(321, "ERROR_MISSING_STATUS", message="Inventory status is missing.")
+        spec.exit_code(322, "ERROR_INVALID_STATUS", message="Inventory status is invalid.")
+        spec.inputs["metadata"]["options"]["parser_name"].default = "itensor_spin.spectral_inventory"
+        spec.inputs["metadata"]["options"]["withmpi"].default = False
+
+    def prepare_for_submission(self, folder):
+        parameters = normalize_parameters(self.inputs.parameters.get_dict())
+        if self.inputs.parent_folder.computer.uuid != self.inputs.code.computer.uuid:
+            raise ValueError("parent_folder and code must use the same computer")
+        config = {
+            "format_version": 1,
+            "segment_index": self.inputs.segment_index.value,
+            "parameters": parameters,
+            "ground_state": "gs_checkpoint.jld2",
+            "resume_state": "resume_state",
+            "status_file": "inventory_status.json",
+            "summary_file": "inventory_summary.json",
+        }
+        with folder.open("inventory.json", "w", encoding="utf8") as handle:
+            json.dump(config, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+
+        code_info = CodeInfo()
+        code_info.code_uuid = self.inputs.code.uuid
+        code_info.cmdline_params = ["--inspect", "inventory.json"]
+        code_info.stdout_name = "scheduler-stdout.txt"
+        code_info.stderr_name = "scheduler-stderr.txt"
+        code_info.withmpi = False
+
+        calc_info = CalcInfo()
+        calc_info.uuid = self.uuid
+        calc_info.codes_info = [code_info]
+        calc_info.local_copy_list = [
+            (
+                self.inputs.ground_state.uuid,
+                self.inputs.ground_state.filename,
+                "gs_checkpoint.jld2",
+            )
+        ]
+        calc_info.remote_symlink_list = [
+            (
+                self.inputs.code.computer.uuid,
+                f"{self.inputs.parent_folder.get_remote_path()}/state",
+                "resume_state",
+            )
+        ]
+        calc_info.retrieve_list = [
+            "inventory_status.json",
+            "inventory_summary.json",
+            "scheduler-stdout.txt",
+            "scheduler-stderr.txt",
+        ]
+        return calc_info

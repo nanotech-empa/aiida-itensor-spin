@@ -178,7 +178,15 @@ function Chebyshev_moments_streaming(
         save_progress(completed_n, moments, tnm2, tnm1)
     end
 
+    last_iteration_seconds = nothing
     for n in (completed_n + 1):N
+        if stop_before_epoch !== nothing && last_iteration_seconds !== nothing
+            required_seconds = max(600.0, 2.0 * last_iteration_seconds)
+            if time() + required_seconds >= stop_before_epoch
+                save_progress(completed_n, moments, tnm2, tnm1)
+                throw(IntentionalCheckpointStop(completed_n))
+            end
+        end
         iteration_start = time()
         tmp = 2 * apply(H, tnm1; cutoff=cutoff)
         tn = add(tmp, -tnm2; cutoff=cutoff)
@@ -203,11 +211,12 @@ function Chebyshev_moments_streaming(
         end
         tnm2, tnm1 = tnm1, tn
         completed_n = n
+        last_iteration_seconds = time() - iteration_start
 
         if n % heartbeat_every == 0 || n == N
             println(
                 "progress completed_n=$n/$N " *
-                "iteration_seconds=$(time() - iteration_start) " *
+                "iteration_seconds=$last_iteration_seconds " *
                 "elapsed_seconds=$(time() - recurrence_start) " *
                 "maxlinkdim=$(maxlinkdim(tnm1))",
             )

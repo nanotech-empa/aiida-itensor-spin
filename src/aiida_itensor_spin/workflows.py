@@ -7,7 +7,11 @@ import math
 from aiida import orm
 from aiida.engine import ToContext, WorkChain, calcfunction, while_
 
-from .calculations import GroundStateCalculation, SpectralSegmentCalculation
+from .calculations import (
+    GroundStateCalculation,
+    SpectralInventoryCalculation,
+    SpectralSegmentCalculation,
+)
 from .contracts import (
     ContractError,
     add_discovered_task_count,
@@ -1046,4 +1050,174 @@ class SpinSectorEnsembleWorkChain(WorkChain):
         if self.ctx.failed_spectra:
             self.report(f"failed selected spectra for 2Sz={self.ctx.failed_spectra}")
             return self.exit_codes.ERROR_SECTOR_SPECTRUM_FAILED
+        return None
+
+
+class SpinSpectraRestartWorkChain(WorkChain):
+    """Inventory an immutable remote state and continue spectra with a fresh plan."""
+
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.input("code", valid_type=orm.AbstractCode)
+        spec.input("ground_state", valid_type=orm.SinglefileData)
+        spec.input("ground_state_metadata", valid_type=orm.Dict)
+        spec.input("spectral_parameters", valid_type=orm.Dict)
+        spec.input("resource_limits", valid_type=orm.Dict)
+        spec.input("restart_folder", valid_type=orm.RemoteData)
+        spec.input("max_segments", valid_type=orm.Int, default=lambda: orm.Int(12))
+        spec.input("max_node_hours", valid_type=orm.Float, default=lambda: orm.Float(10000.0))
+        spec.input("max_stalled_segments", valid_type=orm.Int, default=lambda: orm.Int(2))
+        spec.input("max_failed_segments", valid_type=orm.Int, default=lambda: orm.Int(2))
+        spec.outline(
+            cls.setup,
+            cls.submit_inventory,
+            cls.inspect_inventory,
+            cls.submit_continuation,
+            cls.inspect_continuation,
+        )
+        spec.output("inventory_status", valid_type=orm.Dict, required=False)
+        spec.output("inventory_summary", valid_type=orm.Dict, required=False)
+        spec.output("resource_plan", valid_type=orm.Dict, required=False)
+        for label, node_type in (
+            ("final_status", orm.Dict),
+            ("final_remote_folder", orm.RemoteData),
+            ("final_segment_summary", orm.Dict),
+            ("final_resource_plan", orm.Dict),
+            ("spectrum", orm.SinglefileData),
+            ("collection_report", orm.SinglefileData),
+            ("task_timings", orm.SinglefileData),
+        ):
+            spec.output(label, valid_type=node_type, required=False)
+        spec.exit_code(700, "ERROR_INVALID_INPUT", message="Invalid restart input.")
+        spec.exit_code(701, "ERROR_INVENTORY_FAILED", message="Restart inventory failed.")
+        spec.exit_code(702, "ERROR_ALREADY_COMPLETE", message="Restart state is already complete.")
+        spec.exit_code(703, "ERROR_PLAN_REJECTED", message="Restart resource plan was rejected.")
+        spec.exit_code(704, "ERROR_CONTINUATION_FAILED", message="Spectral continuation failed.")
+
+    def setup(self):
+        try:
+            normalize_parameters(self.inputs.spectral_parameters.get_dict())
+            normalize_resource_limits(self.inputs.resource_limits.get_dict())
+            validate_ground_state_energy_window(self.inputs.ground_state_metadata.get_dict())
+            if self.inputs.restart_folder.computer.uuid != self.inputs.code.computer.uuid:
+                raise ContractError("restart_folder and code must use the same computer")
+            if self.inputs.max_node_hours.value <= 0:
+                raise ContractError("max_node_hours must be > 0")
+        except (KeyError, ContractError, TypeError, ValueError) as exception:
+            self.report(f"invalid restart input: {exception}")
+            return self.exit_codes.ERROR_INVALID_INPUT
+
+    def submit_inventory(self):
+        limits = normalize_resource_limits(self.inputs.resource_limits.get_dict())
+        future = self.submit(
+            SpectralInventoryCalculation,
+            code=self.inputs.code,
+            ground_state=self.inputs.ground_state,
+            parent_folder=self.inputs.restart_folder,
+            parameters=self.inputs.spectral_parameters,
+            segment_index=orm.Int(0),
+            metadata={
+                "label": "ITensor spectral restart inventory",
+                "options": {
+                    "resources": {
+                        "num_machines": 1,
+                        "num_mpiprocs_per_machine": 1,
+                        "num_cores_per_mpiproc": 1,
+                    },
+                    "max_wallclock_seconds": min(1800, limits["wallclock_seconds"]),
+                    "queue_name": limits["partition"],
+                    "withmpi": False,
+                },
+            },
+        )
+        self.report(f"submitted restart inventory CalcJob<{future.pk}>")
+        return ToContext(inventory=future)
+
+    def inspect_inventory(self):
+        child = self.ctx.inventory
+        if (
+            not child.is_finished_ok
+            or "segment_status" not in child.outputs
+            or "inventory_summary" not in child.outputs
+        ):
+            self.report(
+                f"restart inventory CalcJob<{child.pk}> failed with exit status "
+                f"{child.exit_status}"
+            )
+            return self.exit_codes.ERROR_INVENTORY_FAILED
+        status = child.outputs.segment_status
+        self.out("inventory_status", status)
+        self.out("inventory_summary", child.outputs.inventory_summary)
+        values = status.get_dict()
+        self.report(
+            f"inventory found {values['completed_tasks']}/{values['total_tasks']} "
+            f"complete tasks and {values['progress_units_completed']}/"
+            f"{values['progress_units_total']} recurrence units"
+        )
+        if values["completed_tasks"] == values["total_tasks"]:
+            return self.exit_codes.ERROR_ALREADY_COMPLETE
+        plan = derive_resource_plan(
+            self.inputs.ground_state_metadata,
+            self.inputs.spectral_parameters,
+            self.inputs.resource_limits,
+            status,
+        )
+        if plan.get_dict().get("state") != "selected":
+            self.report(f"restart resource plan rejected: {plan.get_dict().get('reason')}")
+            return self.exit_codes.ERROR_PLAN_REJECTED
+        self.ctx.resource_plan = plan
+        self.out("resource_plan", plan)
+
+    def submit_continuation(self):
+        if "resource_plan" not in self.ctx:
+            return None
+        plan = self.ctx.resource_plan.get_dict()
+        layout = plan["selected_layout"]
+        self.report(
+            f"continuing {plan['pending_tasks']} unfinished task(s) on "
+            f"{layout['nodes']} node(s) x {layout['processes_per_node']} "
+            f"processes/node x {layout['threads_per_process']} threads/process"
+        )
+        future = self.submit(
+            SpinSpectraWorkChain,
+            code=self.inputs.code,
+            ground_state=self.inputs.ground_state,
+            ground_state_metadata=self.inputs.ground_state_metadata,
+            spectral_parameters=self.inputs.spectral_parameters,
+            resource_limits=self.inputs.resource_limits,
+            initial_resource_plan=self.ctx.resource_plan,
+            restart_folder=self.inputs.restart_folder,
+            max_segments=self.inputs.max_segments,
+            max_node_hours=self.inputs.max_node_hours,
+            max_stalled_segments=self.inputs.max_stalled_segments,
+            max_failed_segments=self.inputs.max_failed_segments,
+            metadata={
+                "label": "ITensor spectral continuation",
+                "description": "Automatic continuation from inventoried immutable RemoteData.",
+            },
+        )
+        return ToContext(continuation=future)
+
+    def inspect_continuation(self):
+        if "continuation" not in self.ctx:
+            return None
+        child = self.ctx.continuation
+        for label in (
+            "final_status",
+            "final_remote_folder",
+            "final_segment_summary",
+            "final_resource_plan",
+            "spectrum",
+            "collection_report",
+            "task_timings",
+        ):
+            if label in child.outputs:
+                self.out(label, child.outputs[label])
+        if not child.is_finished_ok:
+            self.report(
+                f"spectral continuation WorkChain<{child.pk}> failed with exit status "
+                f"{child.exit_status}"
+            )
+            return self.exit_codes.ERROR_CONTINUATION_FAILED
         return None

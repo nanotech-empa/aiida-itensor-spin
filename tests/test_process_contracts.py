@@ -7,12 +7,18 @@ from pathlib import Path
 
 from aiida_itensor_spin.calculations import (
     GroundStateCalculation,
+    SpectralInventoryCalculation,
     SpectralSegmentCalculation,
 )
-from aiida_itensor_spin.parsers import GroundStateParser, SpectralSegmentParser
+from aiida_itensor_spin.parsers import (
+    GroundStateParser,
+    SpectralInventoryParser,
+    SpectralSegmentParser,
+)
 from aiida_itensor_spin.workflows import (
     SpinChainWorkChain,
     SpinSectorEnsembleWorkChain,
+    SpinSpectraRestartWorkChain,
     SpinSpectraWorkChain,
 )
 
@@ -180,3 +186,40 @@ def test_spectral_cutoff_override_reaches_worker_and_collector():
     assert "spectral_cutoff=cutoff" in worker
     assert 'haskey(options, "--spectral-cutoff")' in collector
     assert 'write(io, "spectral cutoff = $spectral_cutoff' in collector
+
+
+def test_restart_inventory_and_workchain_are_provenance_safe():
+    inventory_inputs = SpectralInventoryCalculation.spec().inputs
+    inventory_outputs = SpectralInventoryCalculation.spec().outputs
+    restart_inputs = SpinSpectraRestartWorkChain.spec().inputs
+    restart_outputs = SpinSpectraRestartWorkChain.spec().outputs
+
+    assert {"ground_state", "parent_folder", "parameters"}.issubset(inventory_inputs)
+    assert {"segment_status", "inventory_summary"}.issubset(inventory_outputs)
+    assert {
+        "ground_state",
+        "ground_state_metadata",
+        "spectral_parameters",
+        "resource_limits",
+        "restart_folder",
+        "max_node_hours",
+    }.issubset(restart_inputs)
+    assert {"inventory_status", "resource_plan", "final_remote_folder"}.issubset(
+        restart_outputs
+    )
+    assert SpectralInventoryParser is not None
+
+
+def test_segment_driver_monitors_progress_while_srun_is_active():
+    with open("remote/itensor-spin-segment", encoding="utf8") as handle:
+        source = handle.read()
+    assert "def run_workers_with_monitor(" in source
+    assert '"running" if return_code is None' in source
+    assert "inspect_restart_state" in source
+
+
+def test_chebyshev_worker_forecasts_checkpoint_time_before_next_iteration():
+    with open("remote/engine/SpectralFunctionCheckpointed.jl", encoding="utf8") as handle:
+        source = handle.read()
+    assert "required_seconds = max(600.0, 2.0 * last_iteration_seconds)" in source
+    assert "time() + required_seconds >= stop_before_epoch" in source
