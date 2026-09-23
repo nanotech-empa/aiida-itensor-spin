@@ -86,6 +86,7 @@ class SpectralSegmentCalculation(CalcJob):
         spec.input("segment_index", valid_type=orm.Int)
         spec.output("segment_status", valid_type=orm.Dict, required=False)
         spec.output("segment_summary", valid_type=orm.Dict, required=False)
+        spec.output("segment_diagnostics", valid_type=orm.Dict, required=False)
         spec.output("spectrum", valid_type=orm.SinglefileData, required=False)
         spec.output("collection_report", valid_type=orm.SinglefileData, required=False)
         spec.output("task_timings", valid_type=orm.SinglefileData, required=False)

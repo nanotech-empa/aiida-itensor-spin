@@ -23,6 +23,36 @@ def _read_json(retrieved, filename: str):
     return value
 
 
+def _segment_diagnostics(retrieved, names: set[str]) -> dict:
+    """Classify scheduler/driver failures without making stderr part of workflow logic."""
+    chunks = []
+    for filename in ("scheduler-stderr.txt", "_scheduler-stderr.txt"):
+        if filename not in names:
+            continue
+        try:
+            with retrieved.base.repository.open(filename, mode="r") as handle:
+                chunks.append(handle.read())
+        except (OSError, UnicodeError):
+            continue
+    text = "\n".join(chunks)
+    lowered = text.lower()
+    oom_markers = ("out of memory", "oom-kill", "oom_kill", "killed process")
+    oom_detected = any(marker in lowered for marker in oom_markers)
+    worker_failure = "returned non-zero exit status" in lowered or "force terminated" in lowered
+    if oom_detected:
+        failure_kind = "out_of_memory"
+    elif worker_failure:
+        failure_kind = "worker_step_failure"
+    else:
+        failure_kind = "none"
+    return {
+        "format_version": 1,
+        "failure_kind": failure_kind,
+        "oom_detected": oom_detected,
+        "worker_step_failure_detected": worker_failure,
+    }
+
+
 def _validate_spectrum(retrieved) -> None:
     """Check that the compact spectrum is non-empty, tabular, and finite."""
     rows = 0
@@ -123,6 +153,7 @@ class SpectralSegmentParser(Parser):
             return self.exit_codes.ERROR_MISSING_RETRIEVED
 
         names = set(retrieved.base.repository.list_object_names())
+        self.out("segment_diagnostics", orm.Dict(dict=_segment_diagnostics(retrieved, names)))
         if "segment_status.json" not in names:
             return self.exit_codes.ERROR_MISSING_STATUS
         if "segment_summary.json" not in names:

@@ -1,9 +1,13 @@
 """Regression tests for the AiiDA process and parser interfaces."""
 
 import inspect
+import io
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader
 from pathlib import Path
+from types import SimpleNamespace
+
+from aiida.engine import BaseRestartWorkChain
 
 from aiida_itensor_spin.calculations import (
     GroundStateCalculation,
@@ -14,12 +18,15 @@ from aiida_itensor_spin.parsers import (
     GroundStateParser,
     SpectralInventoryParser,
     SpectralSegmentParser,
+    _segment_diagnostics,
 )
 from aiida_itensor_spin.workflows import (
+    AdaptiveSpinSpectraWorkChain,
     SpinChainWorkChain,
     SpinSectorEnsembleWorkChain,
     SpinSpectraRestartWorkChain,
     SpinSpectraWorkChain,
+    _oom_processes_per_node_backoff,
 )
 
 
@@ -223,3 +230,40 @@ def test_chebyshev_worker_forecasts_checkpoint_time_before_next_iteration():
         source = handle.read()
     assert "required_seconds = max(600.0, 2.0 * last_iteration_seconds)" in source
     assert "time() + required_seconds >= stop_before_epoch" in source
+
+
+def test_adaptive_spectra_uses_aiida_core_restart_pause_semantics():
+    assert issubclass(AdaptiveSpinSpectraWorkChain, BaseRestartWorkChain)
+    inputs = AdaptiveSpinSpectraWorkChain.spec().inputs
+    assert {"on_unhandled_failure", "pause_on_max_iterations", "max_iterations"}.issubset(inputs)
+    source = inspect.getsource(AdaptiveSpinSpectraWorkChain.handle_segment)
+    assert "adapt_resource_limits_after_oom" in source
+    assert "self.pause(" in source
+    assert "verdi process play" in source
+
+
+def test_segment_parser_publishes_oom_diagnostics():
+    outputs = SpectralSegmentCalculation.spec().outputs
+    assert "segment_diagnostics" in outputs
+    source = inspect.getsource(SpectralSegmentParser.parse)
+    assert '_segment_diagnostics(retrieved, names)' in source
+
+
+def test_oom_worker_packing_backoff_is_monotonic_and_reaches_one():
+    values = [12]
+    while values[-1] > 1:
+        values.append(_oom_processes_per_node_backoff(values[-1]))
+    assert values == [12, 8, 6, 4, 3, 2, 1]
+
+
+def test_segment_diagnostics_classifies_slurm_oom():
+    class Repository:
+        @staticmethod
+        def open(filename, mode="r"):
+            assert filename == "scheduler-stderr.txt"
+            return io.StringIO("srun: error: task 3: Out Of Memory\n")
+
+    retrieved = SimpleNamespace(base=SimpleNamespace(repository=Repository()))
+    result = _segment_diagnostics(retrieved, {"scheduler-stderr.txt"})
+    assert result["failure_kind"] == "out_of_memory"
+    assert result["oom_detected"] is True
