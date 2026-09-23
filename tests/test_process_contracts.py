@@ -237,9 +237,10 @@ def test_adaptive_spectra_uses_aiida_core_restart_pause_semantics():
     inputs = AdaptiveSpinSpectraWorkChain.spec().inputs
     assert {"on_unhandled_failure", "pause_on_max_iterations", "max_iterations"}.issubset(inputs)
     source = inspect.getsource(AdaptiveSpinSpectraWorkChain.handle_segment)
-    assert "adapt_resource_limits_after_oom" in source
-    assert "self.pause(" in source
-    assert "verdi process play" in source
+    assert "_apply_oom_backoff" in source
+    assert "_prepare_next_plan" in source
+    assert "OOM segment supplied no valid checkpoint status" in source
+    assert "_pause_for_decision" in source
 
 
 def test_segment_parser_publishes_oom_diagnostics():

@@ -515,10 +515,74 @@ class AdaptiveSpinSpectraWorkChain(BaseRestartWorkChain):
         self.ctx.node_hours += layout["nodes"] * layout["wallclock_seconds"] / 3600.0
         return super().run_process()
 
+    def _apply_oom_backoff(self, diagnostics_node):
+        previous_ppn = self.ctx.current_plan["selected_layout"]["processes_per_node"]
+        self.ctx.current_limits_node = adapt_resource_limits_after_oom(
+            self.ctx.current_limits_node,
+            self.ctx.current_plan_node,
+            diagnostics_node,
+        )
+        new_ppn = self.ctx.current_limits_node.get_dict()["max_processes_per_node"]
+        self.report(
+            f"OOM detected. Proposed memory-safe backoff: {previous_ppn} -> {new_ppn} "
+            "processes/node. No new CalcJob will be submitted until user approval."
+        )
+
+    def _prepare_next_plan(self):
+        inputs = [
+            self.inputs.ground_state_metadata,
+            self.inputs.spectral_parameters,
+            self.ctx.current_limits_node,
+        ]
+        if self.ctx.previous_status_node is not None:
+            inputs.append(self.ctx.previous_status_node)
+        next_plan = derive_resource_plan(*inputs)
+        if next_plan.get_dict().get("state") != "selected":
+            self.report(f"adaptive resource plan rejected: {next_plan.get_dict().get('reason')}")
+            return False
+        self.ctx.current_plan_node = next_plan
+        self.ctx.current_plan = next_plan.get_dict()
+        self._prepare_process_inputs()
+        return True
+
+    def _pause_for_decision(self, reason):
+        self.report(
+            f"{reason}. Inspect with `verdi process report {self.node.pk}`; "
+            f"continue with `verdi process play {self.node.pk}` or abort with "
+            f"`verdi process kill {self.node.pk}`."
+        )
+        self.pause(f"Paused for user inspection: {reason}")
+
     @process_handler(priority=100)
     def handle_segment(self, node):
+        diagnostics_node = (
+            node.outputs.segment_diagnostics
+            if "segment_diagnostics" in node.outputs
+            else None
+        )
+        diagnostics = (
+            diagnostics_node.get_dict()
+            if diagnostics_node is not None
+            else {"failure_kind": "missing"}
+        )
+        if diagnostics_node is not None:
+            self.ctx.last_diagnostics_node = diagnostics_node
+
         if "segment_status" not in node.outputs:
-            return None
+            if diagnostics.get("failure_kind") != "out_of_memory":
+                return None
+            self._apply_oom_backoff(diagnostics_node)
+            if not self._prepare_next_plan():
+                return ProcessHandlerReport(
+                    do_break=True, exit_code=self.exit_codes.ERROR_PLAN_REJECTED
+                )
+            self.report(
+                "OOM segment supplied no valid checkpoint status; its new remote state "
+                "will not be trusted. Retaining the last validated restart folder."
+            )
+            self._pause_for_decision("OOM backoff requires user approval")
+            return ProcessHandlerReport(do_break=True)
+
         try:
             status = validate_segment_status(
                 node.outputs.segment_status.get_dict(),
@@ -531,13 +595,11 @@ class AdaptiveSpinSpectraWorkChain(BaseRestartWorkChain):
                 do_break=True, exit_code=self.exit_codes.ERROR_INVALID_PROGRESS
             )
 
-        if "segment_diagnostics" not in node.outputs:
+        if diagnostics_node is None:
             self.report("segment did not expose mandatory failure diagnostics")
             return ProcessHandlerReport(
                 do_break=True, exit_code=self.exit_codes.ERROR_MISSING_DIAGNOSTICS
             )
-        diagnostics_node = node.outputs.segment_diagnostics
-        diagnostics = diagnostics_node.get_dict()
         self.ctx.stalled_segments = (
             0 if status["made_progress"] else self.ctx.stalled_segments + 1
         )
@@ -545,7 +607,6 @@ class AdaptiveSpinSpectraWorkChain(BaseRestartWorkChain):
         self.ctx.previous_status_node = node.outputs.segment_status
         self.ctx.previous_summary_node = node.outputs.segment_summary
         self.ctx.previous_folder = node.outputs.remote_folder
-        self.ctx.last_diagnostics_node = diagnostics_node
         self.ctx.complete = status["state"] == "complete"
         for label in ("spectrum", "collection_report", "task_timings"):
             if label in node.outputs:
@@ -560,32 +621,12 @@ class AdaptiveSpinSpectraWorkChain(BaseRestartWorkChain):
             return None
 
         if diagnostics.get("failure_kind") == "out_of_memory":
-            previous_ppn = self.ctx.current_plan["selected_layout"]["processes_per_node"]
-            self.ctx.current_limits_node = adapt_resource_limits_after_oom(
-                self.ctx.current_limits_node,
-                self.ctx.current_plan_node,
-                diagnostics_node,
-            )
-            new_ppn = self.ctx.current_limits_node.get_dict()["max_processes_per_node"]
-            self.report(
-                f"OOM detected. Proposed memory-safe backoff: {previous_ppn} -> {new_ppn} "
-                "processes/node. No new CalcJob will be submitted until user approval."
-            )
+            self._apply_oom_backoff(diagnostics_node)
 
-        next_plan = derive_resource_plan(
-            self.inputs.ground_state_metadata,
-            self.inputs.spectral_parameters,
-            self.ctx.current_limits_node,
-            self.ctx.previous_status_node,
-        )
-        if next_plan.get_dict().get("state") != "selected":
-            self.report(f"adaptive resource plan rejected: {next_plan.get_dict().get('reason')}")
+        if not self._prepare_next_plan():
             return ProcessHandlerReport(
                 do_break=True, exit_code=self.exit_codes.ERROR_PLAN_REJECTED
             )
-        self.ctx.current_plan_node = next_plan
-        self.ctx.current_plan = next_plan.get_dict()
-        self._prepare_process_inputs()
 
         pause_reason = None
         if diagnostics.get("failure_kind") == "out_of_memory":
@@ -597,12 +638,7 @@ class AdaptiveSpinSpectraWorkChain(BaseRestartWorkChain):
         elif self.ctx.stalled_segments >= self.inputs.max_stalled_segments.value:
             pause_reason = "segment made no measurable progress"
         if pause_reason:
-            self.report(
-                f"{pause_reason}. Inspect with `verdi process report {self.node.pk}`; "
-                f"continue with `verdi process play {self.node.pk}` or abort with "
-                f"`verdi process kill {self.node.pk}`."
-            )
-            self.pause(f"Paused for user inspection: {pause_reason}")
+            self._pause_for_decision(pause_reason)
         return ProcessHandlerReport(do_break=True)
 
     def _emit_outputs(self):
