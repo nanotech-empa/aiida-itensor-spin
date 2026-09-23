@@ -5,7 +5,15 @@ from __future__ import annotations
 import math
 
 from aiida import orm
-from aiida.engine import ToContext, WorkChain, calcfunction, while_
+from aiida.engine import (
+    BaseRestartWorkChain,
+    ProcessHandlerReport,
+    ToContext,
+    WorkChain,
+    calcfunction,
+    process_handler,
+    while_,
+)
 
 from .calculations import (
     GroundStateCalculation,
@@ -88,6 +96,34 @@ def derive_resource_plan(
             "processes_with_extra_task": extra_workers,
         }
     )
+
+
+def _oom_processes_per_node_backoff(previous: int) -> int:
+    """Return a deterministic, monotonic memory backoff for worker packing."""
+    if isinstance(previous, bool) or not isinstance(previous, int) or previous < 1:
+        raise ValueError("previous processes_per_node must be a positive integer")
+    return max(1, previous - max(1, previous // 3))
+
+
+@calcfunction
+def adapt_resource_limits_after_oom(
+    resource_limits: orm.Dict,
+    previous_plan: orm.Dict,
+    diagnostics: orm.Dict,
+) -> orm.Dict:
+    """Reduce worker packing after a provenance-recorded out-of-memory failure."""
+    values = diagnostics.get_dict()
+    if values.get("failure_kind") != "out_of_memory":
+        raise ValueError("OOM resource adaptation requires an out_of_memory diagnostic")
+    limits = normalize_resource_limits(resource_limits.get_dict())
+    plan = previous_plan.get_dict()
+    layout = normalize_layout(plan["selected_layout"])
+    previous = layout["processes_per_node"]
+    reduced = _oom_processes_per_node_backoff(previous)
+    limits["max_processes_per_node"] = min(
+        limits["max_processes_per_node"], reduced
+    )
+    return orm.Dict(dict=limits)
 
 
 class SpinSpectraWorkChain(WorkChain):
@@ -338,6 +374,268 @@ class SpinSpectraWorkChain(WorkChain):
         return self.exit_codes.ERROR_MAX_SEGMENTS
 
 
+class AdaptiveSpinSpectraWorkChain(BaseRestartWorkChain):
+    """Restart spectral segments with provenance-tracked OOM backoff and approval."""
+
+    _process_class = SpectralSegmentCalculation
+
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.input("code", valid_type=orm.AbstractCode)
+        spec.input("ground_state", valid_type=orm.SinglefileData)
+        spec.input("ground_state_metadata", valid_type=orm.Dict)
+        spec.input("spectral_parameters", valid_type=orm.Dict)
+        spec.input("resource_limits", valid_type=orm.Dict)
+        spec.input("initial_resource_plan", valid_type=orm.Dict)
+        spec.input(
+            "restart_folder",
+            valid_type=orm.RemoteData,
+            required=False,
+            help="Immutable state folder from a previous spectral segment.",
+        )
+        spec.input("max_node_hours", valid_type=orm.Float, default=lambda: orm.Float(100.0))
+        spec.input("max_stalled_segments", valid_type=orm.Int, default=lambda: orm.Int(1))
+        spec.input("max_failed_segments", valid_type=orm.Int, default=lambda: orm.Int(1))
+        spec.inputs["on_unhandled_failure"].default = lambda: orm.Str("pause")
+        spec.inputs["pause_on_max_iterations"].default = lambda: orm.Bool(True)
+        spec.outline(
+            cls.setup,
+            while_(cls.should_run_process)(cls.run_process, cls.inspect_process),
+            cls.results,
+        )
+        spec.output("final_status", valid_type=orm.Dict, required=False)
+        spec.output("final_remote_folder", valid_type=orm.RemoteData, required=False)
+        spec.output("final_segment_summary", valid_type=orm.Dict, required=False)
+        spec.output("final_resource_plan", valid_type=orm.Dict, required=False)
+        spec.output("final_resource_limits", valid_type=orm.Dict, required=False)
+        spec.output("last_segment_diagnostics", valid_type=orm.Dict, required=False)
+        spec.output("spectrum", valid_type=orm.SinglefileData, required=False)
+        spec.output("collection_report", valid_type=orm.SinglefileData, required=False)
+        spec.output("task_timings", valid_type=orm.SinglefileData, required=False)
+        spec.exit_code(430, "ERROR_INVALID_INPUT", message="Invalid adaptive spectral input.")
+        spec.exit_code(431, "ERROR_INVALID_PROGRESS", message="Invalid segment progress report.")
+        spec.exit_code(432, "ERROR_PLAN_REJECTED", message="Adaptive resource plan was rejected.")
+        spec.exit_code(433, "ERROR_NODE_HOURS", message="Node-hour safety limit reached.")
+        spec.exit_code(434, "ERROR_MISSING_RESULT", message="Complete segment lacks results.")
+        spec.exit_code(
+            435,
+            "ERROR_MISSING_DIAGNOSTICS",
+            message="Segment failure diagnostics are missing.",
+        )
+
+    def setup(self):
+        super().setup()
+        try:
+            initial_plan = self.inputs.initial_resource_plan.get_dict()
+            if initial_plan.get("state") != "selected":
+                raise ContractError(
+                    f"initial resource plan was rejected: {initial_plan.get('reason')}"
+                )
+            normalize_parameters(initial_plan["parameters"])
+            normalize_layout(initial_plan["selected_layout"])
+            normalize_resource_limits(self.inputs.resource_limits.get_dict())
+            if self.inputs.max_node_hours.value <= 0:
+                raise ContractError("max_node_hours must be > 0")
+            if self.inputs.max_stalled_segments.value < 1:
+                raise ContractError("max_stalled_segments must be >= 1")
+            if self.inputs.max_failed_segments.value < 0:
+                raise ContractError("max_failed_segments must be >= 0")
+        except (KeyError, ContractError, TypeError, ValueError) as exception:
+            self.report(f"invalid adaptive spectral input: {exception}")
+            return self.exit_codes.ERROR_INVALID_INPUT
+
+        self.ctx.current_plan_node = self.inputs.initial_resource_plan
+        self.ctx.current_plan = initial_plan
+        self.ctx.current_limits_node = self.inputs.resource_limits
+        self.ctx.previous_status = None
+        self.ctx.previous_status_node = None
+        self.ctx.previous_summary_node = None
+        self.ctx.previous_folder = (
+            self.inputs.restart_folder if "restart_folder" in self.inputs else None
+        )
+        self.ctx.last_diagnostics_node = None
+        self.ctx.result_nodes = {}
+        self.ctx.complete = False
+        self.ctx.limit = None
+        self.ctx.node_hours = 0.0
+        self.ctx.stalled_segments = 0
+        self._prepare_process_inputs()
+
+    def _prepare_process_inputs(self):
+        plan = self.ctx.current_plan
+        layout = plan["selected_layout"]
+        inputs = {
+            "code": self.inputs.code,
+            "ground_state": self.inputs.ground_state,
+            "resource_plan": self.ctx.current_plan_node,
+            "segment_index": orm.Int(self.ctx.iteration),
+            "metadata": {
+                "label": f"ITensor adaptive spectral segment {self.ctx.iteration + 1}",
+                "options": {
+                    "resources": {
+                        "num_machines": layout["nodes"],
+                        "num_mpiprocs_per_machine": layout["processes_per_node"],
+                        "num_cores_per_mpiproc": layout["threads_per_process"],
+                    },
+                    "max_wallclock_seconds": layout["wallclock_seconds"],
+                    "queue_name": layout["partition"],
+                    "withmpi": False,
+                },
+            },
+        }
+        if self.ctx.previous_folder is not None:
+            inputs["parent_folder"] = self.ctx.previous_folder
+        self.ctx.inputs = inputs
+
+    def should_run_process(self):
+        if self.ctx.complete:
+            return False
+        layout = self.ctx.current_plan["selected_layout"]
+        projected = self.ctx.node_hours + layout["nodes"] * layout["wallclock_seconds"] / 3600.0
+        if projected > self.inputs.max_node_hours.value:
+            self.ctx.limit = "node_hours"
+            self.ctx.is_finished = True
+            self.report(
+                f"next segment would raise the allocation ceiling to {projected:.1f} "
+                f"node-hours, above max_node_hours={self.inputs.max_node_hours.value:.1f}"
+            )
+            return False
+        return super().should_run_process()
+
+    def run_process(self):
+        plan = self.ctx.current_plan
+        layout = plan["selected_layout"]
+        self.report(
+            f"adaptive segment {self.ctx.iteration + 1}: {plan['pending_tasks']} unfinished "
+            f"task(s); proposing {layout['nodes']} node(s) x "
+            f"{layout['processes_per_node']} processes/node x "
+            f"{layout['threads_per_process']} threads/process = {plan['workers']} workers"
+        )
+        self.ctx.node_hours += layout["nodes"] * layout["wallclock_seconds"] / 3600.0
+        return super().run_process()
+
+    @process_handler(priority=100)
+    def handle_segment(self, node):
+        if "segment_status" not in node.outputs:
+            return None
+        try:
+            status = validate_segment_status(
+                node.outputs.segment_status.get_dict(),
+                self.ctx.current_plan["parameters"],
+                self.ctx.previous_status,
+            )
+        except ContractError as exception:
+            self.report(f"invalid adaptive segment progress: {exception}")
+            return ProcessHandlerReport(
+                do_break=True, exit_code=self.exit_codes.ERROR_INVALID_PROGRESS
+            )
+
+        if "segment_diagnostics" not in node.outputs:
+            self.report("segment did not expose mandatory failure diagnostics")
+            return ProcessHandlerReport(
+                do_break=True, exit_code=self.exit_codes.ERROR_MISSING_DIAGNOSTICS
+            )
+        diagnostics_node = node.outputs.segment_diagnostics
+        diagnostics = diagnostics_node.get_dict()
+        self.ctx.stalled_segments = (
+            0 if status["made_progress"] else self.ctx.stalled_segments + 1
+        )
+        self.ctx.previous_status = status
+        self.ctx.previous_status_node = node.outputs.segment_status
+        self.ctx.previous_summary_node = node.outputs.segment_summary
+        self.ctx.previous_folder = node.outputs.remote_folder
+        self.ctx.last_diagnostics_node = diagnostics_node
+        self.ctx.complete = status["state"] == "complete"
+        for label in ("spectrum", "collection_report", "task_timings"):
+            if label in node.outputs:
+                self.ctx.result_nodes[label] = node.outputs[label]
+        self.report(
+            f"adaptive segment {self.ctx.iteration}: {status['completed_tasks']}/"
+            f"{status['total_tasks']} tasks; recurrence "
+            f"{status['progress_units_completed']}/{status['progress_units_total']}; "
+            f"diagnostic={diagnostics['failure_kind']}"
+        )
+        if self.ctx.complete:
+            return None
+
+        if diagnostics.get("failure_kind") == "out_of_memory":
+            previous_ppn = self.ctx.current_plan["selected_layout"]["processes_per_node"]
+            self.ctx.current_limits_node = adapt_resource_limits_after_oom(
+                self.ctx.current_limits_node,
+                self.ctx.current_plan_node,
+                diagnostics_node,
+            )
+            new_ppn = self.ctx.current_limits_node.get_dict()["max_processes_per_node"]
+            self.report(
+                f"OOM detected. Proposed memory-safe backoff: {previous_ppn} -> {new_ppn} "
+                "processes/node. No new CalcJob will be submitted until user approval."
+            )
+
+        next_plan = derive_resource_plan(
+            self.inputs.ground_state_metadata,
+            self.inputs.spectral_parameters,
+            self.ctx.current_limits_node,
+            self.ctx.previous_status_node,
+        )
+        if next_plan.get_dict().get("state") != "selected":
+            self.report(f"adaptive resource plan rejected: {next_plan.get_dict().get('reason')}")
+            return ProcessHandlerReport(
+                do_break=True, exit_code=self.exit_codes.ERROR_PLAN_REJECTED
+            )
+        self.ctx.current_plan_node = next_plan
+        self.ctx.current_plan = next_plan.get_dict()
+        self._prepare_process_inputs()
+
+        pause_reason = None
+        if diagnostics.get("failure_kind") == "out_of_memory":
+            pause_reason = "OOM backoff requires user approval"
+        elif diagnostics.get("failure_kind") != "none":
+            pause_reason = (
+                f"{diagnostics.get('failure_kind')} requires user inspection before retry"
+            )
+        elif self.ctx.stalled_segments >= self.inputs.max_stalled_segments.value:
+            pause_reason = "segment made no measurable progress"
+        if pause_reason:
+            self.report(
+                f"{pause_reason}. Inspect with `verdi process report {self.node.pk}`; "
+                f"continue with `verdi process play {self.node.pk}` or abort with "
+                f"`verdi process kill {self.node.pk}`."
+            )
+            self.pause(f"Paused for user inspection: {pause_reason}")
+        return ProcessHandlerReport(do_break=True)
+
+    def _emit_outputs(self):
+        self.out("final_resource_plan", self.ctx.current_plan_node)
+        self.out("final_resource_limits", self.ctx.current_limits_node)
+        if self.ctx.previous_status_node is not None:
+            self.out("final_status", self.ctx.previous_status_node)
+        if self.ctx.previous_folder is not None:
+            self.out("final_remote_folder", self.ctx.previous_folder)
+        if self.ctx.previous_summary_node is not None:
+            self.out("final_segment_summary", self.ctx.previous_summary_node)
+        if self.ctx.last_diagnostics_node is not None:
+            self.out("last_segment_diagnostics", self.ctx.last_diagnostics_node)
+        for label, output in self.ctx.result_nodes.items():
+            self.out(label, output)
+
+    def results(self):
+        self._emit_outputs()
+        if self.ctx.limit == "node_hours":
+            return self.exit_codes.ERROR_NODE_HOURS
+        if self.ctx.complete:
+            missing = {"spectrum", "collection_report", "task_timings"} - set(
+                self.ctx.result_nodes
+            )
+            if missing:
+                self.report(
+                    "completed adaptive calculation lacks parsed results: "
+                    + ", ".join(sorted(missing))
+                )
+                return self.exit_codes.ERROR_MISSING_RESULT
+        return None
+
+
 class SpinChainWorkChain(WorkChain):
     """Complete GS-to-spectrum workflow with adaptive, restartable execution."""
 
@@ -380,6 +678,8 @@ class SpinChainWorkChain(WorkChain):
         spec.output("final_remote_folder", valid_type=orm.RemoteData, required=False)
         spec.output("resource_plan", valid_type=orm.Dict, required=False)
         spec.output("final_resource_plan", valid_type=orm.Dict, required=False)
+        spec.output("final_resource_limits", valid_type=orm.Dict, required=False)
+        spec.output("last_segment_diagnostics", valid_type=orm.Dict, required=False)
         spec.output("final_segment_summary", valid_type=orm.Dict, required=False)
         spec.output("spectrum", valid_type=orm.SinglefileData, required=False)
         spec.output("collection_report", valid_type=orm.SinglefileData, required=False)
@@ -499,13 +799,15 @@ class SpinChainWorkChain(WorkChain):
             "spectral_parameters": self.inputs.spectral_parameters,
             "resource_limits": self.inputs.spectral_resources,
             "initial_resource_plan": self.ctx.initial_resource_plan,
-            "max_segments": self.inputs.max_segments,
+            "max_iterations": self.inputs.max_segments,
             "max_node_hours": self.inputs.max_node_hours,
             "max_stalled_segments": self.inputs.max_stalled_segments,
             "max_failed_segments": self.inputs.max_failed_segments,
+            "on_unhandled_failure": orm.Str("pause"),
+            "pause_on_max_iterations": orm.Bool(True),
             "metadata": {"label": "ITensor adaptive spectral workflow"},
         }
-        future = self.submit(SpinSpectraWorkChain, **inputs)
+        future = self.submit(AdaptiveSpinSpectraWorkChain, **inputs)
         self.report(f"submitted spectral WorkChain<{future.pk}>")
         return ToContext(spectra=future)
 
@@ -515,6 +817,8 @@ class SpinChainWorkChain(WorkChain):
             "final_status",
             "final_remote_folder",
             "final_resource_plan",
+            "final_resource_limits",
+            "last_segment_diagnostics",
             "final_segment_summary",
             "spectrum",
             "collection_report",
@@ -1084,6 +1388,8 @@ class SpinSpectraRestartWorkChain(WorkChain):
             ("final_remote_folder", orm.RemoteData),
             ("final_segment_summary", orm.Dict),
             ("final_resource_plan", orm.Dict),
+            ("final_resource_limits", orm.Dict),
+            ("last_segment_diagnostics", orm.Dict),
             ("spectrum", orm.SinglefileData),
             ("collection_report", orm.SinglefileData),
             ("task_timings", orm.SinglefileData),
@@ -1180,7 +1486,7 @@ class SpinSpectraRestartWorkChain(WorkChain):
             f"processes/node x {layout['threads_per_process']} threads/process"
         )
         future = self.submit(
-            SpinSpectraWorkChain,
+            AdaptiveSpinSpectraWorkChain,
             code=self.inputs.code,
             ground_state=self.inputs.ground_state,
             ground_state_metadata=self.inputs.ground_state_metadata,
@@ -1188,10 +1494,12 @@ class SpinSpectraRestartWorkChain(WorkChain):
             resource_limits=self.inputs.resource_limits,
             initial_resource_plan=self.ctx.resource_plan,
             restart_folder=self.inputs.restart_folder,
-            max_segments=self.inputs.max_segments,
+            max_iterations=self.inputs.max_segments,
             max_node_hours=self.inputs.max_node_hours,
             max_stalled_segments=self.inputs.max_stalled_segments,
             max_failed_segments=self.inputs.max_failed_segments,
+            on_unhandled_failure=orm.Str("pause"),
+            pause_on_max_iterations=orm.Bool(True),
             metadata={
                 "label": "ITensor spectral continuation",
                 "description": "Automatic continuation from inventoried immutable RemoteData.",
@@ -1208,6 +1516,8 @@ class SpinSpectraRestartWorkChain(WorkChain):
             "final_remote_folder",
             "final_segment_summary",
             "final_resource_plan",
+            "final_resource_limits",
+            "last_segment_diagnostics",
             "spectrum",
             "collection_report",
             "task_timings",

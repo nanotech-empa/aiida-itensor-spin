@@ -273,6 +273,28 @@ time, and partition. Inspect any linked Dict with, for example:
 verdi data core.dict show PK
 ```
 
+
+## AiiDA 2.8 restart approval and OOM backoff
+
+New submissions use `AdaptiveSpinSpectraWorkChain`, a subclass of
+`aiida.engine.BaseRestartWorkChain`. Each segment parser publishes structured
+failure diagnostics. When Slurm reports an out-of-memory failure, a provenance-
+recorded CalcFunction reduces the process packing deterministically
+(`12 -> 8 -> 6 -> 4 -> 3 -> 2 -> 1` processes/node), derives the next plan from
+the latest checkpoint state, and pauses before submitting it. The user can
+inspect the proposed plan and choose:
+
+```console
+verdi process report WORKCHAIN_PK
+verdi process play WORKCHAIN_PK
+verdi process kill WORKCHAIN_PK
+```
+
+`play` approves the already recorded plan; it does not mutate process inputs.
+Unknown failures default to AiiDA's `on_unhandled_failure="pause"`, and reaching
+the iteration ceiling uses `pause_on_max_iterations=True`. Normal graceful
+walltime checkpoints continue automatically without user intervention.
+
 ## Physics model interface
 
 The registered Gonçalo model exposes `length`, `impurity_site`, `J`,
