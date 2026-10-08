@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-08",
+  "workflow_published_base": "747afc90237986ed7dcec7098c4d1a4c3f4ca8ae",
+  "workflow_installed_branch": "feature/spectral-bond-cap",
+  "workflow_base_ahead_behind_upstream": [
+    0,
+    0
+  ],
+  "app_published_base": "b7aec7b571a535e564beca0e0a97dd146c52d8d6",
+  "app_installed_branch": "feature/spectral-bond-cap-ui",
+  "app_base_ahead_behind_upstream": [
+    0,
+    0
+  ],
+  "l101_engine_committed_manifest_matches": [
+    20,
+    20
+  ],
+  "l50_engine_working_tree_manifest_matches": [
+    22,
+    22
+  ],
+  "l50_engine_unpublished_manifest_files": 7,
+  "numbered_notebook_generated_copies": 11,
+  "source_commit_groups": [
+    "Workflow spectral bond cap and diagnostics, including new licensed helper and validation files",
+    "Companion app bond-cap controls plus separate viewer/UUID handling changes",
+    "Separate workflow cumulative segment-numbering fix",
+    "Separate aiida-core child-index fix: not installed, stale by 281 commits against fetched upstream main",
+    "Reproducible L101 October 8 diagnostic scripts and compact results, currently outside Git",
+    "Living-memory draft on docs/memory-l101-spectral-diagnostics"
+  ],
+  "no_commits_or_pushes_performed": true,
+  "no_deployed_engine_or_package_changed": true,
+  "memory_files": [
+    "/home/jovyan/opt/aiida-aiidalab-dev/aiida-aiidalab-dev/memory/topics/itensor-spin-chains.md",
+    "/home/jovyan/opt/aiida-aiidalab-dev/aiida-aiidalab-dev/memory/topics/aiida-aiidalab-platform.md"
+  ],
+  "validation": [
+    "Git diff whitespace check",
+    "Skill package quick validation",
+    "Affected Markdown local links and anchors"
+  ],
+  "historical_launchers": [
+    "continue_l101_v5_round2.py",
+    "continue_l101_v5_round3.py"
+  ]
+}
