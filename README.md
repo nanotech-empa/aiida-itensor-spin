@@ -6,6 +6,12 @@ Adaptation of the spin-chain ITensor code developed by
 Experimental, restart-safe AiiDA orchestration for the Julia/ITensor spin-chain
 spectral calculation on Daint/ALPS.
 
+An optional spectral MPS bond cap is described in
+[`docs/spectral-bond-cap.md`](docs/spectral-bond-cap.md). It preserves the
+requested truncation cutoff but reports when the dimension limit forces larger
+discarded weights; existing completed tasks and checkpoint policy history are
+preserved during a supported continuation.
+
 ## Experimental mixed-spin model
 
 A separate model adapter, `mixed_spin_heisenberg_chain_v1`, generalizes the

@@ -512,6 +512,14 @@ class AdaptiveSpinSpectraWorkChain(BaseRestartWorkChain):
             f"{layout['processes_per_node']} processes/node x "
             f"{layout['threads_per_process']} threads/process = {plan['workers']} workers"
         )
+        cap = plan["parameters"].get("max_bond_dimension", 0)
+        if cap:
+            self.report(
+                f"Spectral MPS bond cap={cap}; requested cutoff="
+                f"{plan['parameters'].get('spectral_cutoff', 'from GS checkpoint')}. "
+                "Cap-limited discarded weights and policy changes are reported per task; "
+                "this is not a guaranteed final-spectrum error."
+            )
         self.ctx.node_hours += layout["nodes"] * layout["wallclock_seconds"] / 3600.0
         return super().run_process()
 

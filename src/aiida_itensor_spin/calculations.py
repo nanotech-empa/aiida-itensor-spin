@@ -108,6 +108,10 @@ class SpectralSegmentCalculation(CalcJob):
         if plan.get("state") != "selected":
             raise ValueError("resource_plan must have state='selected'")
         parameters = normalize_parameters(plan["parameters"])
+        if parameters.get("max_bond_dimension", 0) and not self.inputs.code.base.extras.get(
+            "supports_spectral_bond_cap", False
+        ):
+            raise ValueError("Selected Code does not declare spectral bond-cap support; use the updated engine")
         layout = normalize_layout(plan["selected_layout"])
         workers = plan.get("workers")
         capacity = layout["nodes"] * layout["processes_per_node"]
