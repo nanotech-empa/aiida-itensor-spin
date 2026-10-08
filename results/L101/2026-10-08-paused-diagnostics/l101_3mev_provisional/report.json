@@ -1,5 +1,5 @@
 {
-  "status": "provisional saved-moment reconstruction; production L101 remains paused",
+  "status": "provisional saved-moment reconstruction; production L101 explicitly terminated on 2026-10-08",
   "source_segment_uuid": "4b4117de-7c29-4a5b-a1fe-78f438c854eb",
   "source_ground_state_uuid": "9d941100-9de6-4492-8da5-5d6cd168359c",
   "source_remote_data_uuid": "9058e3b7-9381-4cb4-979d-1b9f6aefc819",
@@ -49,5 +49,6 @@
     "Widths vary with energy and are Gaussian standard deviations, not FWHM.",
     "Three initial states are preserved separately; this is not a thermal average.",
     "Negative values are retained in exported data and masked only in the logarithmic heatmap."
-  ]
+  ],
+  "stop_record": "../stop_record.json"
 }

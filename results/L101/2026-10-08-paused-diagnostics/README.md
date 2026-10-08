@@ -5,9 +5,12 @@ spectra discussed before review with Gonçalo. It is not a successful completion
 of the production WorkChain or a final scientific accuracy claim.
 
 The restart WorkChain is `442684f2-65b4-486b-8fbd-f9fdd31669a0`, with adaptive
-child `bfa71143-b8c7-4638-8d50-35dded5d24de`. Both are paused. Their latest
-CalcJob was cancelled; resuming requires inspection of that cancellation or a
-supported new continuation from the last successful immutable checkpoint.
+child `bfa71143-b8c7-4638-8d50-35dded5d24de`. They were initially paused and
+their active allocation cancelled. Later on October 8 the user explicitly
+requested permanent termination: both WorkChains and their latest CalcJob
+are now **Killed**. See `stop_record.json`. Any future continuation would
+require a new explicit request and a new WorkChain using supported checkpoint
+inputs; these terminal processes cannot continue. L50 remains active.
 
 Last successful segment: `4b4117de-7c29-4a5b-a1fe-78f438c854eb`.
 RemoteData: `9058e3b7-9381-4cb4-979d-1b9f6aefc819`.
@@ -32,7 +35,7 @@ this Git snapshot contains their compact moments and scalar metadata.
 - `validate_filter.jl`, its log/checkpoints and `production_engine/`: the
   isolated six-site exact-diagonalization comparison of the production library's
   full-bandwidth and energy-filtered modes.
-- `pause_record.json`, `publication_validation.json`, and `git-audit/`:
+- `pause_record.json`, `stop_record.json`, `publication_validation.json`, and `git-audit/`:
   historical operational and source/deployment records. Scheduler IDs and
   local paths describe this instance and are not portable launch configuration.
 

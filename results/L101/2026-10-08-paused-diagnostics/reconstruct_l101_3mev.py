@@ -139,7 +139,7 @@ fig.savefig(OUT / "central_sites_comparison.pdf")
 plt.close(fig)
 
 report = {
-    "status": "provisional saved-moment reconstruction; production L101 remains paused",
+    "status": "provisional saved-moment reconstruction; production termination recorded separately in stop_record.json",
     "source_segment_uuid": "4b4117de-7c29-4a5b-a1fe-78f438c854eb",
     "source_ground_state_uuid": "9d941100-9de6-4492-8da5-5d6cd168359c",
     "source_remote_data_uuid": "9058e3b7-9381-4cb4-979d-1b9f6aefc819",
