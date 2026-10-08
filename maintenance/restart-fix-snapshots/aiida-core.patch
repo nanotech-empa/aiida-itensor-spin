@@ -1,0 +1,183 @@
+diff --git a/src/aiida/engine/processes/workchains/restart.py b/src/aiida/engine/processes/workchains/restart.py
+index 3560cfb32..136e0c713 100644
+--- a/src/aiida/engine/processes/workchains/restart.py
++++ b/src/aiida/engine/processes/workchains/restart.py
+@@ -235,8 +235,9 @@ class BaseRestartWorkChain(WorkChain):
+         except AttributeError:
+             raise AttributeError('no process input dictionary was defined in `self.ctx.inputs`')
+ 
+-        # Set the `CALL` link label
+-        unwrapped_inputs.setdefault('metadata', {})['call_link_label'] = f'iteration_{self.ctx.iteration:02d}'
++        # The approval-window counter can reset after pause/play, but child history is cumulative.
++        child_index = len(self.ctx.get('children', [])) + 1
++        unwrapped_inputs.setdefault('metadata', {})['call_link_label'] = f'iteration_{child_index:02d}'
+ 
+         inputs = self._wrap_bare_dict_inputs(self.process_class.spec().inputs, unwrapped_inputs)
+         node = self.submit(self.process_class, **inputs)
+@@ -280,7 +281,7 @@ class BaseRestartWorkChain(WorkChain):
+         and it will move on to the next step that directly follows the `while` conditional, if there is one defined in
+         the outline.
+         """
+-        node = self.ctx.children[self.ctx.iteration - 1]
++        node = self.ctx.children[-1]
+ 
+         if node.is_excepted:
+             return self.exit_codes.ERROR_SUB_PROCESS_EXCEPTED
+@@ -431,9 +432,9 @@ class BaseRestartWorkChain(WorkChain):
+ 
+     def results(self) -> ExitCode | None:
+         """Attach the outputs specified in the output specification from the last completed process."""
+-        node = self.ctx.children[self.ctx.iteration - 1]
++        node = self.ctx.children[-1]
+ 
+-        self.report(f'work chain completed after {self.ctx.iteration} iterations')
++        self.report(f'work chain completed after {len(self.ctx.children)} iterations')
+         self._attach_outputs(node)
+         return None
+ 
+diff --git a/tests/engine/processes/workchains/test_restart.py b/tests/engine/processes/workchains/test_restart.py
+index 36e762a2d..560f77585 100644
+--- a/tests/engine/processes/workchains/test_restart.py
++++ b/tests/engine/processes/workchains/test_restart.py
+@@ -205,7 +205,7 @@ def test_run_process(generate_work_chain, generate_calculation_node, monkeypatch
+     assert process.node.base.extras.get(SomeWorkChain._considered_handlers_extra) == [[]]
+ 
+ 
+-@pytest.mark.requires_rmq
++@pytest.mark.requires_broker
+ @pytest.mark.parametrize('max_iterations', (1, 2, 3))
+ @pytest.mark.parametrize('pause_on_max_iterations', (False, True))
+ def test_global_max_iterations(generate_work_chain, generate_calculation_node, max_iterations, pause_on_max_iterations):
+@@ -238,6 +238,98 @@ def test_global_max_iterations(generate_work_chain, generate_calculation_node, m
+         assert result == engine.BaseRestartWorkChain.exit_codes.ERROR_MAXIMUM_ITERATIONS_EXCEEDED
+ 
+ 
++@pytest.mark.requires_broker
++@pytest.mark.parametrize('max_iterations', (1, 2, 3))
++def test_inspect_after_max_iterations_pause_and_play(
++    generate_work_chain, generate_calculation_node, max_iterations
++):
++    """Playing a limit-paused chain must inspect the newest child, not an old one."""
++    process = generate_work_chain(
++        SomeWorkChain, {'pause_on_max_iterations': True, 'max_iterations': max_iterations}
++    )
++    process.setup()
++    process.ctx.children = []
++
++    # Exercise two approval windows: the child history must survive both resets.
++    for _ in range(2):
++        for iteration in range(1, max_iterations + 1):
++            process.ctx.children.append(generate_calculation_node(exit_status=1).store())
++            process.ctx.iteration += 1
++            result = process.inspect_process()
++            if iteration < max_iterations:
++                assert result == engine.ExitCode(0)
++                assert not process.paused
++            else:
++                assert result is None
++                assert process.paused
++                assert process.ctx.iteration == 0
++        process.play()
++        assert not process.paused
++
++    newest = generate_calculation_node(exit_status=0).store()
++    process.ctx.children.append(newest)
++    process.ctx.iteration += 1
++    assert process.inspect_process() is None
++    assert process.ctx.is_finished is True
++    assert not process.paused
++    assert len(process.ctx.children) == 2 * max_iterations + 1
++    assert process.ctx.children[-1] is newest
++
++
++@pytest.mark.requires_broker
++def test_run_process_call_label_after_iteration_reset(
++    generate_work_chain, generate_calculation_node, monkeypatch
++):
++    """Child CALL labels must not repeat when the approval-window counter resets."""
++    submitted = []
++
++    def mock_submit(_, process_class, **kwargs):
++        assert process_class is SomeWorkChain._process_class
++        submitted.append(kwargs['metadata']['call_link_label'])
++        return generate_calculation_node()
++
++    monkeypatch.setattr(SomeWorkChain, 'submit', mock_submit)
++    process = generate_work_chain(SomeWorkChain, {})
++    process.setup()
++    process.ctx.children = [generate_calculation_node()]
++    process.ctx.iteration = 0
++    assert isinstance(process.run_process(), engine.ToContext)
++    assert process.ctx.iteration == 1
++    assert submitted == ['iteration_02']
++
++
++@pytest.mark.requires_broker
++def test_inspect_after_limit_pause_checkpoint_reload(generate_work_chain, generate_calculation_node):
++    """The latest-child fix must also survive restoration from a persisted pause."""
++    from aiida.engine.persistence import AiiDAPersister
++
++    process = generate_work_chain(SomeWorkChain, {'pause_on_max_iterations': True, 'max_iterations': 1})
++    process.setup()
++    old = generate_calculation_node(exit_status=1).store()
++    process.ctx.children = [old]
++    process.ctx.iteration = 1
++    assert process.inspect_process() is None
++    assert process.paused
++    assert process.ctx.iteration == 0
++    bundle = AiiDAPersister().load_checkpoint(process.node.pk)
++    process.close()
++
++    restored = bundle.unbundle()
++    try:
++        assert restored.paused
++        assert restored.ctx.iteration == 0
++        assert [node.uuid for node in restored.ctx.children] == [old.uuid]
++        restored.play()
++        newest = generate_calculation_node(exit_status=0).store()
++        restored.ctx.children.append(newest)
++        restored.ctx.iteration += 1
++        assert restored.inspect_process() is None
++        assert restored.ctx.is_finished is True
++        assert not restored.paused
++    finally:
++        restored.close()
++
++
+ class WorkChainWithFinishHandler(engine.BaseRestartWorkChain):
+     """WorkChain with a handler that sets is_finished."""
+ 
+@@ -261,7 +353,32 @@ class WorkChainWithFinishHandler(engine.BaseRestartWorkChain):
+             return engine.ProcessHandlerReport(do_break=False, exit_code=engine.ExitCode(42, 'CUSTOM_FINISH'))
+ 
+ 
+-@pytest.mark.requires_rmq
++@pytest.mark.requires_broker
++def test_results_after_iteration_reset(generate_work_chain, generate_calculation_node, aiida_localhost):
++    """Results must come from the newest child even after the counter was reset."""
++    process = generate_work_chain(WorkChainWithFinishHandler, {})
++    process.setup()
++    process.ctx.children = [
++        generate_calculation_node(
++            outputs={
++                'retrieved': orm.FolderData(),
++                'remote_folder': orm.RemoteData(computer=aiida_localhost, remote_path='/tmp/old'),
++            }
++        ),
++        generate_calculation_node(
++            outputs={
++                'retrieved': orm.FolderData(),
++                'remote_folder': orm.RemoteData(computer=aiida_localhost, remote_path='/tmp/new'),
++            }
++        ),
++    ]
++    process.ctx.iteration = 1
++    assert process.results() is None
++    assert process.outputs['retrieved'].uuid == process.ctx.children[-1].outputs.retrieved.uuid
++    assert process.outputs['remote_folder'].uuid == process.ctx.children[-1].outputs.remote_folder.uuid
++
++
++@pytest.mark.requires_broker
+ def test_handler_sets_is_finished(generate_work_chain, generate_calculation_node, aiida_localhost):
+     """Test the case when a handler sets ctx.is_finished=True."""
+ 
