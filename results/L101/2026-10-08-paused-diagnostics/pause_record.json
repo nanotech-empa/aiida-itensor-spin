@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-08",
+  "authorization": "User approved pausing L101, preserving checkpoints and testing a narrower filtered expansion.",
+  "paused_process_uuids": [
+    "442684f2-65b4-486b-8fbd-f9fdd31669a0",
+    "bfa71143-b8c7-4638-8d50-35dded5d24de",
+    "a3a4ab9e-2668-4349-bde9-ed2fef0a3916"
+  ],
+  "cancelled_slurm_job": "5003237",
+  "cancelled_allocation_elapsed": "00:19:42",
+  "last_successful_segment_uuid": "4b4117de-7c29-4a5b-a1fe-78f438c854eb",
+  "last_successful_remote_data_uuid": "9058e3b7-9381-4cb4-979d-1b9f6aefc819",
+  "preserved_remote_directory": "/ritom/scratch/cscs/cpi/aiida/4b/41/17de-7c29-4a5b-a1fe-78f438c854eb",
+  "completed_tasks": 891,
+  "pending_tasks": 18,
+  "progress_units_completed": 1322972,
+  "progress_units_total": 1339866,
+  "ground_state_uuid": "9d941100-9de6-4492-8da5-5d6cd168359c",
+  "cancelled_segment_observation": "All 18 worker stdout logs ended at their checkpoint resume message; no completed new iteration was logged before cancellation.",
+  "resume_warning": "The paused CalcJob points at a cancelled allocation. Do not blindly play the parent; inspect cancellation handling or use a supported new continuation from the last successful immutable RemoteData.",
+  "L50_action": "None; existing job 5003236 remains running.",
+  "validation": {
+    "scope": "Six-site spin-half Heisenberg chain, J=100 meV, one central zz task; same exact GS in both modes. Not an L101 acceptance test.",
+    "production_source": "Checksum-pinned 0.4.3 engine used by L101, copied read-only for local validation.",
+    "full_bandwidth_meV": 374.3577133887924,
+    "filtered_bandwidth_meV": 160.0,
+    "output_range_meV": [0.0, 100.0],
+    "smearing_parameter_meV": 5.0,
+    "spectral_cutoff": 1e-10,
+    "filter_krylov_dimension": 12,
+    "filter_sweeps": 1,
+    "full_vectors": 38,
+    "filtered_vectors": 16,
+    "full_spectral_relative_L2_error_vs_matching_ED_reference": 2.3830287997247115e-14,
+    "filtered_spectral_relative_L2_error_vs_matching_ED_reference": 4.936134877094514e-9,
+    "filtered_moment_max_abs_error_vs_ED": 9.407608747569185e-9,
+    "full_vs_filtered_spectral_relative_L2_difference": 0.2881212204652802,
+    "interpretation": "Both modes agree with their own exact-diagonalization reconstruction. Their broadened spectra differ: the identical smearing parameter does not enforce identical broadening across bandwidths. Filtering adds many Hamiltonian applications per vector, so fewer vectors do not establish a speedup.",
+    "timing_caveat": "First calls include compilation; elapsed timings are not a production performance comparison.",
+    "production_replacement_submitted": false
+  }
+}

@@ -1,0 +1,626 @@
+{
+  "checkpoint_segment_uuid": "4b4117de-7c29-4a5b-a1fe-78f438c854eb",
+  "scope": "Only the 18 unfinished tasks; incomplete diagnostic spectra, not a finished L101 result.",
+  "bandwidth_meV": 4422.5335168197,
+  "caveats": [
+    "Order stability alone does not prove truncation accuracy or convergence to the final spectrum.",
+    "Native Jackson order comparisons include changes in kernel broadening.",
+    "Gaussian diagnostics use fixed damping in Chebyshev angle, not uniform energy broadening.",
+    "Gaussian sigma labels apply at 100 meV and are smaller at lower energies.",
+    "No post-hoc scientific acceptance tolerance is assigned."
+  ],
+  "tasks": [
+    {
+      "task": 151,
+      "state": 1,
+      "site": 51,
+      "channel": "zz",
+      "completed_vectors": 486,
+      "target_vectors": 1474,
+      "valid_moments": 971,
+      "jackson_80pct_to_latest_relative_L2": 0.08948304094509267,
+      "jackson_latest_peak_energy_meV": 85.30000000000001,
+      "jackson_latest_approx_sigma_at_100_meV": 2.414296903697823,
+      "jackson_latest_approx_sigma_at_0_meV": 1.1419399085325597,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.04630933130398809,
+        "60pct_to_latest_relative_L2": 0.11649375462543492,
+        "last_available_order_damping": 0.14942317724484971,
+        "min_spectral_value": -0.0001690227037804165,
+        "peak_energy_meV": 85.30000000000001
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 0.0008653080849570036,
+        "60pct_to_latest_relative_L2": 0.00938902264606752,
+        "last_available_order_damping": 0.0004985076955686082,
+        "min_spectral_value": 7.227504723938165e-05,
+        "peak_energy_meV": 85.2
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 1.1142468036387148e-07,
+        "60pct_to_latest_relative_L2": 4.564118583809171e-05,
+        "last_available_order_damping": 6.712221772753118e-10,
+        "min_spectral_value": 0.000159754745061611,
+        "peak_energy_meV": 85.10000000000001
+      }
+    },
+    {
+      "task": 152,
+      "state": 1,
+      "site": 51,
+      "channel": "pm",
+      "completed_vectors": 515,
+      "target_vectors": 1474,
+      "valid_moments": 1029,
+      "jackson_80pct_to_latest_relative_L2": 0.0928443326488401,
+      "jackson_latest_peak_energy_meV": 85.30000000000001,
+      "jackson_latest_approx_sigma_at_100_meV": 2.278214085024865,
+      "jackson_latest_approx_sigma_at_0_meV": 1.077574005038985,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.03533259567798569,
+        "60pct_to_latest_relative_L2": 0.10315561617361114,
+        "last_available_order_damping": 0.11823249797717764,
+        "min_spectral_value": -9.19979494371803e-05,
+        "peak_energy_meV": 85.30000000000001
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 0.0003889162518672665,
+        "60pct_to_latest_relative_L2": 0.006752410748967725,
+        "last_available_order_damping": 0.00019541030439742038,
+        "min_spectral_value": 0.0001572852945892237,
+        "peak_energy_meV": 85.30000000000001
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 1.642178162047423e-08,
+        "60pct_to_latest_relative_L2": 1.9472220409832505e-05,
+        "last_available_order_damping": 4.978245172255352e-11,
+        "min_spectral_value": 0.0003108456578849818,
+        "peak_energy_meV": 85.30000000000001
+      }
+    },
+    {
+      "task": 153,
+      "state": 1,
+      "site": 51,
+      "channel": "mp",
+      "completed_vectors": 507,
+      "target_vectors": 1474,
+      "valid_moments": 1013,
+      "jackson_80pct_to_latest_relative_L2": 0.08265586376321463,
+      "jackson_latest_peak_energy_meV": 85.2,
+      "jackson_latest_approx_sigma_at_100_meV": 2.3141977230904107,
+      "jackson_latest_approx_sigma_at_0_meV": 1.094593930093895,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.039283937366164805,
+        "60pct_to_latest_relative_L2": 0.11229097744756454,
+        "last_available_order_damping": 0.1262921809286794,
+        "min_spectral_value": -0.000244691127063908,
+        "peak_energy_meV": 85.30000000000001
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 0.0005178140179458501,
+        "60pct_to_latest_relative_L2": 0.00772258202348901,
+        "last_available_order_damping": 0.0002543934074239868,
+        "min_spectral_value": 0.00015244554631208487,
+        "peak_energy_meV": 85.10000000000001
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 2.9227600009603815e-08,
+        "60pct_to_latest_relative_L2": 2.5675626591291335e-05,
+        "last_available_order_damping": 1.0358432361376084e-10,
+        "min_spectral_value": 0.00032460108269358217,
+        "peak_energy_meV": 84.80000000000001
+      }
+    },
+    {
+      "task": 154,
+      "state": 1,
+      "site": 52,
+      "channel": "zz",
+      "completed_vectors": 595,
+      "target_vectors": 1474,
+      "valid_moments": 1189,
+      "jackson_80pct_to_latest_relative_L2": 0.042747984474372024,
+      "jackson_latest_peak_energy_meV": 0.0,
+      "jackson_latest_approx_sigma_at_100_meV": 1.9716419625656738,
+      "jackson_latest_approx_sigma_at_0_meV": 0.9325682516275151,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.032039702208823295,
+        "60pct_to_latest_relative_L2": 0.05677633453246735,
+        "last_available_order_damping": 0.05776066900610662,
+        "min_spectral_value": -0.000537030406982541,
+        "peak_energy_meV": 0.1
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 3.0626494215588383e-05,
+        "60pct_to_latest_relative_L2": 0.001200872327296137,
+        "last_available_order_damping": 1.1130863553224808e-05,
+        "min_spectral_value": 0.0003815598004437549,
+        "peak_energy_meV": 43.1
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 2.1241248286218763e-11,
+        "60pct_to_latest_relative_L2": 4.216034906599431e-07,
+        "last_available_order_damping": 1.7392336994312547e-14,
+        "min_spectral_value": 0.0008374319095261401,
+        "peak_energy_meV": 15.8
+      }
+    },
+    {
+      "task": 155,
+      "state": 1,
+      "site": 52,
+      "channel": "pm",
+      "completed_vectors": 629,
+      "target_vectors": 1474,
+      "valid_moments": 1257,
+      "jackson_80pct_to_latest_relative_L2": 0.03775398566659617,
+      "jackson_latest_peak_energy_meV": 11.5,
+      "jackson_latest_approx_sigma_at_100_meV": 1.8649819359511426,
+      "jackson_latest_approx_sigma_at_0_meV": 0.8821190542443242,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.039440220114498444,
+        "60pct_to_latest_relative_L2": 0.05145239686771204,
+        "last_available_order_damping": 0.041286581902205764,
+        "min_spectral_value": -0.0005413530664597363,
+        "peak_energy_meV": 11.3
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 2.5201879654426274e-05,
+        "60pct_to_latest_relative_L2": 0.000662429920360715,
+        "last_available_order_damping": 2.9055992668747913e-06,
+        "min_spectral_value": 0.0008108040344194346,
+        "peak_energy_meV": 12.700000000000001
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 3.4692472659352553e-12,
+        "60pct_to_latest_relative_L2": 1.0743269641360774e-07,
+        "last_available_order_damping": 4.1696462820090033e-16,
+        "min_spectral_value": 0.0016055563210389343,
+        "peak_energy_meV": 14.600000000000001
+      }
+    },
+    {
+      "task": 156,
+      "state": 1,
+      "site": 52,
+      "channel": "mp",
+      "completed_vectors": 639,
+      "target_vectors": 1474,
+      "valid_moments": 1277,
+      "jackson_80pct_to_latest_relative_L2": 0.05037654208176687,
+      "jackson_latest_peak_energy_meV": 0.0,
+      "jackson_latest_approx_sigma_at_100_meV": 1.835773135074852,
+      "jackson_latest_approx_sigma_at_0_meV": 0.8683035639664178,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.03560261280188771,
+        "60pct_to_latest_relative_L2": 0.05413877982287416,
+        "last_available_order_damping": 0.03727137678658369,
+        "min_spectral_value": -0.00047308042182391143,
+        "peak_energy_meV": 0.0
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 2.1830372114646787e-05,
+        "60pct_to_latest_relative_L2": 0.0007393960504766392,
+        "last_available_order_damping": 1.9297530797713098e-06,
+        "min_spectral_value": 0.0007452854894773204,
+        "peak_energy_meV": 43.400000000000006
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 2.413748920222681e-12,
+        "60pct_to_latest_relative_L2": 9.3353201230392e-08,
+        "last_available_order_damping": 1.3378078184915591e-16,
+        "min_spectral_value": 0.0016522031176037194,
+        "peak_energy_meV": 40.900000000000006
+      }
+    },
+    {
+      "task": 454,
+      "state": 2,
+      "site": 51,
+      "channel": "zz",
+      "completed_vectors": 459,
+      "target_vectors": 1474,
+      "valid_moments": 917,
+      "jackson_80pct_to_latest_relative_L2": 0.08994373611826584,
+      "jackson_latest_peak_energy_meV": 85.2,
+      "jackson_latest_approx_sigma_at_100_meV": 2.5564692404477496,
+      "jackson_latest_approx_sigma_at_0_meV": 1.209186097257487,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.05833928713103503,
+        "60pct_to_latest_relative_L2": 0.1319498230489547,
+        "last_available_order_damping": 0.18356075251196446,
+        "min_spectral_value": -0.00021599815999346692,
+        "peak_energy_meV": 85.30000000000001
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 0.0016058637347888159,
+        "60pct_to_latest_relative_L2": 0.013456659775380828,
+        "last_available_order_damping": 0.0011353226904539304,
+        "min_spectral_value": 7.418826803502892e-05,
+        "peak_energy_meV": 85.2
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 5.079685507422301e-07,
+        "60pct_to_latest_relative_L2": 0.00011453526683553819,
+        "last_available_order_damping": 6.603525854096205e-09,
+        "min_spectral_value": 0.00016034983790480493,
+        "peak_energy_meV": 85.10000000000001
+      }
+    },
+    {
+      "task": 455,
+      "state": 2,
+      "site": 51,
+      "channel": "pm",
+      "completed_vectors": 466,
+      "target_vectors": 1474,
+      "valid_moments": 931,
+      "jackson_80pct_to_latest_relative_L2": 0.06973705928379767,
+      "jackson_latest_peak_energy_meV": 84.7,
+      "jackson_latest_approx_sigma_at_100_meV": 2.518026093974851,
+      "jackson_latest_approx_sigma_at_0_meV": 1.1910028476746677,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.05905153291090223,
+        "60pct_to_latest_relative_L2": 0.1359198730299287,
+        "last_available_order_damping": 0.1742221242757639,
+        "min_spectral_value": -0.0005150207036766094,
+        "peak_energy_meV": 85.2
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 0.0013147124647187195,
+        "60pct_to_latest_relative_L2": 0.011705585939197124,
+        "last_available_order_damping": 0.0009213257704536311,
+        "min_spectral_value": 0.00019189722568720163,
+        "peak_energy_meV": 84.4
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 2.815965731607569e-07,
+        "60pct_to_latest_relative_L2": 7.441483808399944e-05,
+        "last_available_order_damping": 3.696702466257845e-09,
+        "min_spectral_value": 0.0003422650036840111,
+        "peak_energy_meV": 83.60000000000001
+      }
+    },
+    {
+      "task": 456,
+      "state": 2,
+      "site": 51,
+      "channel": "mp",
+      "completed_vectors": 496,
+      "target_vectors": 1474,
+      "valid_moments": 991,
+      "jackson_80pct_to_latest_relative_L2": 0.10483423782851907,
+      "jackson_latest_peak_energy_meV": 85.4,
+      "jackson_latest_approx_sigma_at_100_meV": 2.365572445500087,
+      "jackson_latest_approx_sigma_at_0_meV": 1.1188936944350307,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.040215196604423784,
+        "60pct_to_latest_relative_L2": 0.11165464245709518,
+        "last_available_order_damping": 0.1380455372726142,
+        "min_spectral_value": -0.00019534554343587804,
+        "peak_energy_meV": 85.30000000000001
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 0.0006007586206516275,
+        "60pct_to_latest_relative_L2": 0.008880527129603704,
+        "last_available_order_damping": 0.00036315287391934997,
+        "min_spectral_value": -3.336034187089043e-06,
+        "peak_energy_meV": 85.4
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 4.693447111412304e-08,
+        "60pct_to_latest_relative_L2": 3.748432138839231e-05,
+        "last_available_order_damping": 2.7841524699981705e-10,
+        "min_spectral_value": 0.00010830975131454775,
+        "peak_energy_meV": 85.60000000000001
+      }
+    },
+    {
+      "task": 457,
+      "state": 2,
+      "site": 52,
+      "channel": "zz",
+      "completed_vectors": 545,
+      "target_vectors": 1474,
+      "valid_moments": 1089,
+      "jackson_80pct_to_latest_relative_L2": 0.04075804465394857,
+      "jackson_latest_peak_energy_meV": 0.0,
+      "jackson_latest_approx_sigma_at_100_meV": 2.1526926478334123,
+      "jackson_latest_approx_sigma_at_0_meV": 1.0182035364417956,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.020345532790204013,
+        "60pct_to_latest_relative_L2": 0.05645312313174343,
+        "last_available_order_damping": 0.09148233758450819,
+        "min_spectral_value": -0.00011434312282023295,
+        "peak_energy_meV": 0.0
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 0.00011600174262505356,
+        "60pct_to_latest_relative_L2": 0.002203768038243778,
+        "last_available_order_damping": 7.00404637895073e-05,
+        "min_spectral_value": 0.0004088419379887758,
+        "peak_energy_meV": 13.5
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 1.4392217883684973e-09,
+        "60pct_to_latest_relative_L2": 2.9472228970460547e-06,
+        "last_available_order_damping": 2.8794053978130943e-12,
+        "min_spectral_value": 0.0008390873626179144,
+        "peak_energy_meV": 15.600000000000001
+      }
+    },
+    {
+      "task": 458,
+      "state": 2,
+      "site": 52,
+      "channel": "pm",
+      "completed_vectors": 577,
+      "target_vectors": 1474,
+      "valid_moments": 1153,
+      "jackson_80pct_to_latest_relative_L2": 0.0627491118182112,
+      "jackson_latest_peak_energy_meV": 0.0,
+      "jackson_latest_approx_sigma_at_100_meV": 2.033202336071627,
+      "jackson_latest_approx_sigma_at_0_meV": 0.9616857338986258,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.03518694989090819,
+        "60pct_to_latest_relative_L2": 0.08240781255108874,
+        "last_available_order_damping": 0.06847746069355165,
+        "min_spectral_value": -0.0010472908643805539,
+        "peak_energy_meV": 0.1
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 6.889064174190262e-05,
+        "60pct_to_latest_relative_L2": 0.0023457643234340206,
+        "last_available_order_damping": 2.198824610528641e-05,
+        "min_spectral_value": 0.0009494853053080475,
+        "peak_energy_meV": 0.0
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 1.9174073222469468e-10,
+        "60pct_to_latest_relative_L2": 1.4368961279737916e-06,
+        "last_available_order_damping": 1.1524989159230137e-13,
+        "min_spectral_value": 0.0013779887915764393,
+        "peak_energy_meV": 41.5
+      }
+    },
+    {
+      "task": 459,
+      "state": 2,
+      "site": 52,
+      "channel": "mp",
+      "completed_vectors": 568,
+      "target_vectors": 1474,
+      "valid_moments": 1135,
+      "jackson_80pct_to_latest_relative_L2": 0.039720245104367835,
+      "jackson_latest_peak_energy_meV": 10.4,
+      "jackson_latest_approx_sigma_at_100_meV": 2.0654469546172565,
+      "jackson_latest_approx_sigma_at_0_meV": 0.9769371376080312,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.022158322642982838,
+        "60pct_to_latest_relative_L2": 0.038578537497984414,
+        "last_available_order_damping": 0.07441363045496484,
+        "min_spectral_value": -0.0007174445073946501,
+        "peak_energy_meV": 10.600000000000001
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 4.784643036498122e-05,
+        "60pct_to_latest_relative_L2": 0.0012947482032858036,
+        "last_available_order_damping": 3.066267026463551e-05,
+        "min_spectral_value": 0.00010738196138523923,
+        "peak_energy_meV": 11.0
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 1.6279186720513018e-10,
+        "60pct_to_latest_relative_L2": 1.173167109428178e-06,
+        "last_available_order_damping": 2.9027222370239086e-13,
+        "min_spectral_value": 0.0005352019572893082,
+        "peak_energy_meV": 13.100000000000001
+      }
+    },
+    {
+      "task": 757,
+      "state": 3,
+      "site": 51,
+      "channel": "zz",
+      "completed_vectors": 464,
+      "target_vectors": 1474,
+      "valid_moments": 927,
+      "jackson_80pct_to_latest_relative_L2": 0.0897230310132402,
+      "jackson_latest_peak_energy_meV": 85.2,
+      "jackson_latest_approx_sigma_at_100_meV": 2.528891362988766,
+      "jackson_latest_approx_sigma_at_0_meV": 1.1961420185384202,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.05199754456431812,
+        "60pct_to_latest_relative_L2": 0.12840379631224638,
+        "last_available_order_damping": 0.1768550271861949,
+        "min_spectral_value": -0.0001901697143100588,
+        "peak_energy_meV": 85.30000000000001
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 0.0012344108022642386,
+        "60pct_to_latest_relative_L2": 0.012404362402617128,
+        "last_available_order_damping": 0.0009782945573898719,
+        "min_spectral_value": 6.970644003552097e-05,
+        "peak_energy_meV": 85.2
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 2.872381824026335e-07,
+        "60pct_to_latest_relative_L2": 9.032049037843728e-05,
+        "last_available_order_damping": 4.367103021518494e-09,
+        "min_spectral_value": 0.00015946759318525753,
+        "peak_energy_meV": 85.10000000000001
+      }
+    },
+    {
+      "task": 758,
+      "state": 3,
+      "site": 51,
+      "channel": "pm",
+      "completed_vectors": 480,
+      "target_vectors": 1474,
+      "valid_moments": 959,
+      "jackson_80pct_to_latest_relative_L2": 0.08139396905718232,
+      "jackson_latest_peak_energy_meV": 85.2,
+      "jackson_latest_approx_sigma_at_100_meV": 2.4445070839317897,
+      "jackson_latest_approx_sigma_at_0_meV": 1.1562290419031445,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.05096053352758969,
+        "60pct_to_latest_relative_L2": 0.1253010239473771,
+        "last_available_order_damping": 0.15657354605994386,
+        "min_spectral_value": -0.000403681227122778,
+        "peak_energy_meV": 85.30000000000001
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 0.00100522186667394,
+        "60pct_to_latest_relative_L2": 0.01077234136784286,
+        "last_available_order_damping": 0.0006009987242990604,
+        "min_spectral_value": 0.000190625797425039,
+        "peak_energy_meV": 85.10000000000001
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 1.424992713994134e-07,
+        "60pct_to_latest_relative_L2": 6.350774949031181e-05,
+        "last_available_order_damping": 1.1283050403168419e-09,
+        "min_spectral_value": 0.0003261658950898147,
+        "peak_energy_meV": 84.80000000000001
+      }
+    },
+    {
+      "task": 759,
+      "state": 3,
+      "site": 51,
+      "channel": "mp",
+      "completed_vectors": 494,
+      "target_vectors": 1474,
+      "valid_moments": 987,
+      "jackson_80pct_to_latest_relative_L2": 0.09506005692004117,
+      "jackson_latest_peak_energy_meV": 85.30000000000001,
+      "jackson_latest_approx_sigma_at_100_meV": 2.375159365238689,
+      "jackson_latest_approx_sigma_at_0_meV": 1.1234282180193673,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.04003235400182913,
+        "60pct_to_latest_relative_L2": 0.11210579980562774,
+        "last_available_order_damping": 0.14026769053125335,
+        "min_spectral_value": -0.00024810206579447007,
+        "peak_energy_meV": 85.30000000000001
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 0.000581411581923956,
+        "60pct_to_latest_relative_L2": 0.008566113728871755,
+        "last_available_order_damping": 0.00038710660902495223,
+        "min_spectral_value": 0.00010767003669244386,
+        "peak_energy_meV": 85.30000000000001
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 4.263824254556716e-08,
+        "60pct_to_latest_relative_L2": 3.491190890424721e-05,
+        "last_available_order_damping": 3.324693603781403e-10,
+        "min_spectral_value": 0.0003109167583070626,
+        "peak_energy_meV": 85.30000000000001
+      }
+    },
+    {
+      "task": 760,
+      "state": 3,
+      "site": 52,
+      "channel": "zz",
+      "completed_vectors": 550,
+      "target_vectors": 1474,
+      "valid_moments": 1099,
+      "jackson_80pct_to_latest_relative_L2": 0.04168309268374719,
+      "jackson_latest_peak_energy_meV": 0.0,
+      "jackson_latest_approx_sigma_at_100_meV": 2.1331049076347464,
+      "jackson_latest_approx_sigma_at_0_meV": 1.0089387180938267,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.019752720293035445,
+        "60pct_to_latest_relative_L2": 0.05535332771122875,
+        "last_available_order_damping": 0.08752990240602908,
+        "min_spectral_value": -5.611170251795543e-05,
+        "peak_energy_meV": 0.0
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 8.698081596940727e-05,
+        "60pct_to_latest_relative_L2": 0.001916643695712247,
+        "last_available_order_damping": 5.869833425070908e-05,
+        "min_spectral_value": 0.0003685167966267758,
+        "peak_energy_meV": 12.9
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 7.83239013100473e-10,
+        "60pct_to_latest_relative_L2": 1.9378330673764728e-06,
+        "last_available_order_damping": 1.7627174903370634e-12,
+        "min_spectral_value": 0.0008372337807957679,
+        "peak_energy_meV": 15.8
+      }
+    },
+    {
+      "task": 761,
+      "state": 3,
+      "site": 52,
+      "channel": "pm",
+      "completed_vectors": 583,
+      "target_vectors": 1474,
+      "valid_moments": 1165,
+      "jackson_80pct_to_latest_relative_L2": 0.0498872478255229,
+      "jackson_latest_peak_energy_meV": 0.0,
+      "jackson_latest_approx_sigma_at_100_meV": 2.0122594793910613,
+      "jackson_latest_approx_sigma_at_0_meV": 0.9517799580988117,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.03270945157591722,
+        "60pct_to_latest_relative_L2": 0.06697522333093384,
+        "last_available_order_damping": 0.06473838665013489,
+        "min_spectral_value": -0.0009789991755854398,
+        "peak_energy_meV": 0.1
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 5.0144548002351315e-05,
+        "60pct_to_latest_relative_L2": 0.0016931989195110321,
+        "last_available_order_damping": 1.7564973077661122e-05,
+        "min_spectral_value": 0.0009237342833814197,
+        "peak_energy_meV": 43.400000000000006
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 1.252595163558167e-10,
+        "60pct_to_latest_relative_L2": 8.840322612455745e-07,
+        "last_available_order_damping": 6.175718160139554e-14,
+        "min_spectral_value": 0.0016318954304991448,
+        "peak_energy_meV": 41.0
+      }
+    },
+    {
+      "task": 762,
+      "state": 3,
+      "site": 52,
+      "channel": "mp",
+      "completed_vectors": 585,
+      "target_vectors": 1474,
+      "valid_moments": 1169,
+      "jackson_80pct_to_latest_relative_L2": 0.03794537846131306,
+      "jackson_latest_peak_energy_meV": 10.600000000000001,
+      "jackson_latest_approx_sigma_at_100_meV": 2.0053740748422464,
+      "jackson_latest_approx_sigma_at_0_meV": 0.9485232259923999,
+      "angular_gaussian_sigma100_1.5": {
+        "80pct_to_latest_relative_L2": 0.02656561765793379,
+        "60pct_to_latest_relative_L2": 0.04584320516315055,
+        "last_available_order_damping": 0.06352974678156216,
+        "min_spectral_value": -0.0008204988879493987,
+        "peak_energy_meV": 10.9
+      },
+      "angular_gaussian_sigma100_3": {
+        "80pct_to_latest_relative_L2": 2.7701026101083268e-05,
+        "60pct_to_latest_relative_L2": 0.001000705973285109,
+        "last_available_order_damping": 1.6289527878141768e-05,
+        "min_spectral_value": 0.0005951570219727263,
+        "peak_energy_meV": 11.4
+      },
+      "angular_gaussian_sigma100_5": {
+        "80pct_to_latest_relative_L2": 5.686969088724248e-11,
+        "60pct_to_latest_relative_L2": 4.260490112650649e-07,
+        "last_available_order_damping": 5.0089399568195885e-14,
+        "min_spectral_value": 0.0015992144020582784,
+        "peak_energy_meV": 14.600000000000001
+      }
+    }
+  ]
+}

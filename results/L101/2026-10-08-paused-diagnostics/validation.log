@@ -1,0 +1,110 @@
+VALIDATION_START name=full W=374.3577133887924 N=38 filtered=false
+# Bandwidth info
+Emax provided -> calculation with full bandwidth
+
+# Info about Chebyshev polynomials
+Routine that doubles number of Chebyshev polynomials triggered (B = C^†)
+ω_smearing provided -> effective number of Chebyshev polynomials = 75
+
+checkpointed recurrence completed_n=2/38 checkpoint=/home/jovyan/work/l101_narrow_bandwidth_20261008/full_recurrence.jld2
+progress completed_n=3/38 iteration_seconds=0.10498785972595215 elapsed_seconds=3.895780086517334 maxlinkdim=8
+progress completed_n=4/38 iteration_seconds=0.025985002517700195 elapsed_seconds=3.921833038330078 maxlinkdim=8
+progress completed_n=5/38 iteration_seconds=0.002196788787841797 elapsed_seconds=3.924088954925537 maxlinkdim=8
+progress completed_n=6/38 iteration_seconds=0.0018551349639892578 elapsed_seconds=3.9259729385375977 maxlinkdim=8
+progress completed_n=7/38 iteration_seconds=0.001676797866821289 elapsed_seconds=3.9276740550994873 maxlinkdim=8
+progress completed_n=8/38 iteration_seconds=0.0017809867858886719 elapsed_seconds=3.9294791221618652 maxlinkdim=8
+progress completed_n=9/38 iteration_seconds=0.0016798973083496094 elapsed_seconds=3.9311840534210205 maxlinkdim=8
+progress completed_n=10/38 iteration_seconds=0.0016548633575439453 elapsed_seconds=3.9328620433807373 maxlinkdim=8
+checkpointed recurrence completed_n=10/38 checkpoint=/home/jovyan/work/l101_narrow_bandwidth_20261008/full_recurrence.jld2
+progress completed_n=11/38 iteration_seconds=0.0029001235961914062 elapsed_seconds=3.9484190940856934 maxlinkdim=8
+progress completed_n=12/38 iteration_seconds=0.004149913787841797 elapsed_seconds=3.952609062194824 maxlinkdim=8
+progress completed_n=13/38 iteration_seconds=0.00179290771484375 elapsed_seconds=3.954447031021118 maxlinkdim=8
+progress completed_n=14/38 iteration_seconds=0.0016188621520996094 elapsed_seconds=3.9560940265655518 maxlinkdim=8
+progress completed_n=15/38 iteration_seconds=0.0016140937805175781 elapsed_seconds=3.9577319622039795 maxlinkdim=8
+progress completed_n=16/38 iteration_seconds=0.014468908309936523 elapsed_seconds=3.9722299575805664 maxlinkdim=8
+progress completed_n=17/38 iteration_seconds=0.0016949176788330078 elapsed_seconds=3.9739561080932617 maxlinkdim=8
+progress completed_n=18/38 iteration_seconds=0.0015878677368164062 elapsed_seconds=3.975567102432251 maxlinkdim=8
+progress completed_n=19/38 iteration_seconds=0.0015790462493896484 elapsed_seconds=3.977168083190918 maxlinkdim=8
+progress completed_n=20/38 iteration_seconds=0.0015218257904052734 elapsed_seconds=3.9787120819091797 maxlinkdim=8
+checkpointed recurrence completed_n=20/38 checkpoint=/home/jovyan/work/l101_narrow_bandwidth_20261008/full_recurrence.jld2
+progress completed_n=21/38 iteration_seconds=0.0017910003662109375 elapsed_seconds=3.9831559658050537 maxlinkdim=8
+progress completed_n=22/38 iteration_seconds=0.0015990734100341797 elapsed_seconds=3.9847779273986816 maxlinkdim=8
+progress completed_n=23/38 iteration_seconds=0.0016100406646728516 elapsed_seconds=3.986410140991211 maxlinkdim=8
+progress completed_n=24/38 iteration_seconds=0.0016570091247558594 elapsed_seconds=3.9880919456481934 maxlinkdim=8
+progress completed_n=25/38 iteration_seconds=0.0015599727630615234 elapsed_seconds=3.9896719455718994 maxlinkdim=8
+progress completed_n=26/38 iteration_seconds=0.0014929771423339844 elapsed_seconds=3.9911890029907227 maxlinkdim=8
+progress completed_n=27/38 iteration_seconds=0.0015230178833007812 elapsed_seconds=3.9927430152893066 maxlinkdim=8
+progress completed_n=28/38 iteration_seconds=0.011645078659057617 elapsed_seconds=4.004411935806274 maxlinkdim=8
+progress completed_n=29/38 iteration_seconds=0.0015940666198730469 elapsed_seconds=4.006036043167114 maxlinkdim=8
+progress completed_n=30/38 iteration_seconds=0.0015418529510498047 elapsed_seconds=4.0076000690460205 maxlinkdim=8
+checkpointed recurrence completed_n=30/38 checkpoint=/home/jovyan/work/l101_narrow_bandwidth_20261008/full_recurrence.jld2
+progress completed_n=31/38 iteration_seconds=0.001664876937866211 elapsed_seconds=4.011723041534424 maxlinkdim=8
+progress completed_n=32/38 iteration_seconds=0.001558065414428711 elapsed_seconds=4.013304948806763 maxlinkdim=8
+progress completed_n=33/38 iteration_seconds=0.0014920234680175781 elapsed_seconds=4.014816999435425 maxlinkdim=8
+progress completed_n=34/38 iteration_seconds=0.0014832019805908203 elapsed_seconds=4.016319990158081 maxlinkdim=8
+progress completed_n=35/38 iteration_seconds=0.0015277862548828125 elapsed_seconds=4.0178680419921875 maxlinkdim=8
+progress completed_n=36/38 iteration_seconds=0.001447916030883789 elapsed_seconds=4.019335031509399 maxlinkdim=8
+progress completed_n=37/38 iteration_seconds=0.0015621185302734375 elapsed_seconds=4.020916938781738 maxlinkdim=8
+progress completed_n=38/38 iteration_seconds=0.010953187942504883 elapsed_seconds=4.0318989753723145 maxlinkdim=8
+checkpointed recurrence completed_n=38/38 checkpoint=/home/jovyan/work/l101_narrow_bandwidth_20261008/full_recurrence.jld2
+VALIDATION_RESULT full moment_error=1.2753686995381486e-14 spectrum_relative_L2=2.3830287997247115e-14 elapsed=12.791712045669556
+VALIDATION_START name=filtered160 W=160.0 N=16 filtered=true
+# Bandwidth info
+Wstar provided -> calculation with effective bandwidth (energy truncation triggered)
+
+# Info about Chebyshev polynomials
+Routine that doubles number of Chebyshev polynomials triggered (B = C^†)
+ω_smearing provided -> effective number of Chebyshev polynomials = 31
+
+energy truncation of |t_1>
+sweep = 1 
+energy truncation of |t_2>
+sweep = 1 checkpointed recurrence completed_n=2/16 checkpoint=/home/jovyan/work/l101_narrow_bandwidth_20261008/filtered160_recurrence.jld2
+
+energy truncation of |t_3>
+sweep = 1 progress completed_n=3/16 iteration_seconds=1.2410340309143066 elapsed_seconds=3.7400879859924316 maxlinkdim=8
+
+energy truncation of |t_4>
+sweep = 1 progress completed_n=4/16 iteration_seconds=1.4493777751922607 elapsed_seconds=5.189527988433838 maxlinkdim=8
+
+energy truncation of |t_5>
+sweep = 1 progress completed_n=5/16 iteration_seconds=1.2836320400238037 elapsed_seconds=6.47322416305542 maxlinkdim=8
+
+energy truncation of |t_6>
+sweep = 1 progress completed_n=6/16 iteration_seconds=1.2866270542144775 elapsed_seconds=7.7599170207977295 maxlinkdim=8
+
+energy truncation of |t_7>
+sweep = 1 progress completed_n=7/16 iteration_seconds=1.262925148010254 elapsed_seconds=9.0228910446167 maxlinkdim=8
+
+energy truncation of |t_8>
+sweep = 1 progress completed_n=8/16 iteration_seconds=1.1857578754425049 elapsed_seconds=10.208717107772827 maxlinkdim=8
+
+energy truncation of |t_9>
+sweep = 1 progress completed_n=9/16 iteration_seconds=1.2285089492797852 elapsed_seconds=11.437291145324707 maxlinkdim=8
+
+energy truncation of |t_10>
+sweep = 1 progress completed_n=10/16 iteration_seconds=1.2278459072113037 elapsed_seconds=12.66522216796875 maxlinkdim=8
+checkpointed recurrence completed_n=10/16 checkpoint=/home/jovyan/work/l101_narrow_bandwidth_20261008/filtered160_recurrence.jld2
+
+energy truncation of |t_11>
+sweep = 1 progress completed_n=11/16 iteration_seconds=1.1865479946136475 elapsed_seconds=13.855573177337646 maxlinkdim=8
+
+energy truncation of |t_12>
+sweep = 1 progress completed_n=12/16 iteration_seconds=1.211426019668579 elapsed_seconds=15.06705904006958 maxlinkdim=8
+
+energy truncation of |t_13>
+sweep = 1 progress completed_n=13/16 iteration_seconds=1.1243400573730469 elapsed_seconds=16.191462993621826 maxlinkdim=8
+
+energy truncation of |t_14>
+sweep = 1 progress completed_n=14/16 iteration_seconds=1.2081279754638672 elapsed_seconds=17.399654150009155 maxlinkdim=8
+
+energy truncation of |t_15>
+sweep = 1 progress completed_n=15/16 iteration_seconds=1.1736719608306885 elapsed_seconds=18.573390007019043 maxlinkdim=8
+
+energy truncation of |t_16>
+sweep = 1 
+
+progress completed_n=16/16 iteration_seconds=1.0519850254058838 elapsed_seconds=19.625436067581177 maxlinkdim=8
+checkpointed recurrence completed_n=16/16 checkpoint=/home/jovyan/work/l101_narrow_bandwidth_20261008/filtered160_recurrence.jld2
+VALIDATION_RESULT filtered160 moment_error=9.407608747569185e-9 spectrum_relative_L2=4.936134877094514e-9 elapsed=20.028587102890015
+VALIDATION_COMPLETE full_vs_filtered_relative_L2=0.2881212204652802

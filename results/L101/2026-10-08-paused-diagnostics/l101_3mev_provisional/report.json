@@ -1,0 +1,53 @@
+{
+  "status": "provisional saved-moment reconstruction; production L101 remains paused",
+  "source_segment_uuid": "4b4117de-7c29-4a5b-a1fe-78f438c854eb",
+  "source_ground_state_uuid": "9d941100-9de6-4492-8da5-5d6cd168359c",
+  "source_remote_data_uuid": "9058e3b7-9381-4cb4-979d-1b9f6aefc819",
+  "task_count": 909,
+  "completed_recurrence_tasks": 891,
+  "partial_recurrence_tasks": 18,
+  "states": 3,
+  "sites": 101,
+  "channel_sum": "zz + 0.5*pm + 0.5*mp",
+  "thermal_average": false,
+  "saved_temperature_K": 4.0,
+  "state_energies_meV": [
+    -2585.4354579378914,
+    -2585.398024181611,
+    -2585.3641043693715
+  ],
+  "bandwidth_meV": 4422.533516819721,
+  "spectral_cutoffs_in_preserved_checkpoints": [
+    1e-08
+  ],
+  "kernel": "Gaussian damping in Chebyshev angle, exp(-0.5*(sigma_angle*n)^2)",
+  "sigma_energy_at_100_meV": 3.0,
+  "sigma_energy_at_0_meV": 1.4189720081033013,
+  "not_uniform_energy_broadening": true,
+  "gaussian_sigma_is_not_FWHM": true,
+  "new_recurrence_iterations": 0,
+  "stored_completed_spectra_validation_max_abs_difference": 5.129230373768223e-14,
+  "stored_spectra_validation_tasks": [
+    1,
+    148,
+    150,
+    304,
+    607,
+    909
+  ],
+  "all_909_checkpoint_ground_state_hashes_verified": true,
+  "max_task_relative_L2_change_80pct_to_all_saved": 0.0016058637347888672,
+  "max_combined_site_relative_L2_change_80pct_to_all_saved": 0.000983611359859984,
+  "median_combined_site_relative_L2_change_80pct_to_all_saved": 0.0,
+  "max_combined_site_relative_L2_difference_from_finer_diagnostic": 0.4487126774802491,
+  "minimum_combined_spectrum": -0.00040492409617943993,
+  "negative_combined_sample_count": 2146,
+  "caveats": [
+    "Order sensitivity is not a final error bound or proof of scientific convergence.",
+    "891 recurrence tasks finished; 18 tasks remain incomplete under their original 1474-vector target.",
+    "The 3 meV Gaussian reconstruction differs from rerunning the original Jackson algorithm with omega_smearing_meV=3.",
+    "Widths vary with energy and are Gaussian standard deviations, not FWHM.",
+    "Three initial states are preserved separately; this is not a thermal average.",
+    "Negative values are retained in exported data and masked only in the logarithmic heatmap."
+  ]
+}
