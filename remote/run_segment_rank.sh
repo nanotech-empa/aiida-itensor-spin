@@ -20,6 +20,7 @@ CHECKPOINT_EVERY=${ITENSOR_SPIN_CHECKPOINT_EVERY:-1}
 HEARTBEAT_EVERY=${ITENSOR_SPIN_HEARTBEAT_EVERY:-1}
 MANIFEST_ROOT=${ITENSOR_SPIN_MANIFEST_ROOT:?task manifest root is required}
 SPECTRAL_CUTOFF=${ITENSOR_SPIN_SPECTRAL_CUTOFF:-}
+MAX_BOND_DIMENSION=${ITENSOR_SPIN_MAX_BOND_DIMENSION:-0}
 ENV_ROOT=${CODE_ROOT}/ITensor_env
 JULIA_BIN=${ITENSOR_SPIN_JULIA:-/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia}
 worker_dir=${WORKER_ROOT}/worker_${RANK}
@@ -48,9 +49,9 @@ exec "${JULIA_BIN}" --startup-file=no --project="${ENV_ROOT}" \
     --backend "${BACKEND}" \
     --threading-mode "${THREADING_MODE}" \
     "${CUTOFF_ARGS[@]}" \
+    --max-bond-dimension "${MAX_BOND_DIMENSION}" \
     --resume true \
     --checkpoint-every "${CHECKPOINT_EVERY}" \
     --heartbeat-every "${HEARTBEAT_EVERY}" \
     --stop-after-n "${STOP_AFTER_N}" \
     --stop-before-epoch "${DEADLINE_EPOCH}"
-

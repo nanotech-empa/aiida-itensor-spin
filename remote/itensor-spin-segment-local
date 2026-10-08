@@ -388,6 +388,8 @@ def main():
     threading_mode = parameters["threading_mode"]
     checkpoint_every = integer(parameters, "checkpoint_every", 1)
     heartbeat_every = integer(parameters, "heartbeat_every", 1)
+    max_bond_dimension = integer({"max_bond_dimension": parameters.get("max_bond_dimension", 0)}, "max_bond_dimension")
+    spectral_cutoff = parameters.get("spectral_cutoff")
     stop_after_n = int(layout.get("stop_after_n", 0))
     environment = os.environ.copy()
     environment.update(
@@ -401,8 +403,13 @@ def main():
             "ITENSOR_SPIN_CHECKPOINT_EVERY": str(checkpoint_every),
             "ITENSOR_SPIN_HEARTBEAT_EVERY": str(heartbeat_every),
             "ITENSOR_SPIN_MANIFEST_ROOT": str(manifest_root.resolve()),
+            "ITENSOR_SPIN_MAX_BOND_DIMENSION": str(max_bond_dimension),
         }
     )
+    if spectral_cutoff is not None:
+        if isinstance(spectral_cutoff, bool) or not isinstance(spectral_cutoff, (int, float)) or spectral_cutoff <= 0:
+            fail("spectral_cutoff must be a positive number")
+        environment["ITENSOR_SPIN_SPECTRAL_CUTOFF"] = str(spectral_cutoff)
     if initial_progress[1] < total_tasks:
         run_local_workers(
             workers,
@@ -429,8 +436,7 @@ def main():
     if complete:
         collector_environment = environment.copy()
         collector_environment["JULIA_NUM_THREADS"] = "1,0"
-        run(
-            [
+        collector_command = [
                 str(julia),
                 "--startup-file=no",
                 f"--project={case_root / 'ITensor_env'}",
@@ -447,9 +453,10 @@ def main():
                 threading_mode,
                 "--reference-tolerance",
                 "1e-10",
-            ],
-            env=collector_environment,
-        )
+            ]
+        if spectral_cutoff is not None:
+            collector_command.extend(["--spectral-cutoff", str(spectral_cutoff)])
+        run(collector_command, env=collector_environment)
         for filename in ("spectrum.tsv", "collection_report.txt", "task_timings.tsv"):
             source = merged_root / filename
             source.is_file() or fail(f"collector did not create {filename}")

@@ -444,6 +444,7 @@ def main():
     threading_mode = parameters["threading_mode"]
     checkpoint_every = integer(parameters, "checkpoint_every", 1)
     heartbeat_every = integer(parameters, "heartbeat_every", 1)
+    max_bond_dimension = integer({"max_bond_dimension": parameters.get("max_bond_dimension", 0)}, "max_bond_dimension")
     spectral_cutoff = parameters.get("spectral_cutoff")
     if spectral_cutoff is not None:
         if (
@@ -466,6 +467,7 @@ def main():
             "ITENSOR_SPIN_CHECKPOINT_EVERY": str(checkpoint_every),
             "ITENSOR_SPIN_HEARTBEAT_EVERY": str(heartbeat_every),
             "ITENSOR_SPIN_MANIFEST_ROOT": str(manifest_root.resolve()),
+            "ITENSOR_SPIN_MAX_BOND_DIMENSION": str(max_bond_dimension),
         }
     )
     if spectral_cutoff is not None:

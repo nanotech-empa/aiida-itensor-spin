@@ -209,6 +209,8 @@ def normalize_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
     )
     if "spectral_cutoff" in value:
         result["spectral_cutoff"] = spectral_cutoff
+    if "max_bond_dimension" in value:
+        result["max_bond_dimension"] = _integer(value, "max_bond_dimension", minimum=0)
     if "expected_total_tasks" in value:
         result["expected_total_tasks"] = _integer(value, "expected_total_tasks", minimum=1)
     return result
