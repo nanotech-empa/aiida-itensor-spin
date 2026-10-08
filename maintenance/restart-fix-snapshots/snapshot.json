@@ -1,0 +1,23 @@
+{
+  "aiida-core": {
+    "base_commit": "27d71c131c59943afa4e1ff58cdbf20d55442384",
+    "branch": "fix/restart-child-after-limit-reset",
+    "status": "preservation snapshot; not installed; upstream readiness not asserted",
+    "patch_file": "aiida-core.patch",
+    "untracked_regression_files": [],
+    "preserved_commit": "096f1012234b9e90b4a85167e5833d6d34b7c54d",
+    "git_bundle": "aiida-core-restart-fix.bundle"
+  },
+  "aiida-itensor-spin": {
+    "base_commit": "747afc90237986ed7dcec7098c4d1a4c3f4ca8ae",
+    "branch": "fix/monotonic-spectral-segment-index",
+    "status": "preservation snapshot; not installed; upstream readiness not asserted",
+    "patch_file": "aiida-itensor-spin.patch",
+    "untracked_regression_files": [
+      "tests/test_adaptive_restart_numbering.py"
+    ],
+    "preserved_commit": "2a9aa23",
+    "published_branch": "fix/monotonic-spectral-segment-index"
+  },
+  "note": "Preserved on 2026-10-08 to survive loss of the working container. Core snapshot is based on an old upstream revision and must be refreshed before an upstream PR."
+}
