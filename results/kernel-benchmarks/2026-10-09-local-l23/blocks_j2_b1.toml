@@ -1,0 +1,63 @@
+ITensorMPS_version = "0.4.1"
+ITensors_version = "0.9.30"
+architecture = "aarch64"
+blas_config = "LBTConfig([ILP64] libopenblas64_.so)"
+blas_threads = 1
+cpu_threads_visible = 8
+fixture_sha256 = "97fe0da3c5a6cc3e7e95192f3c2cae647fc216ff285c0beb8f94c48aa2fe8990"
+julia_threads = 2
+julia_version = "1.12.6"
+load_seconds = 2.850451946258545
+max_discarded_weight = 0.0
+memory_total_bytes = 0x07d2a3e000
+mode = "blocks"
+moments = [-0.02068135110427033, 0.006615658456628787]
+next_max_bond = 911
+note = "Each repeat starts from identical saved vectors. Warmup and load are excluded from medians. Checkpoint timer is a representative write, not a production I/O benchmark."
+os = "Linux"
+repeats = 3
+strided_threads = 1
+threaded_blocksparse = true
+warmup_seconds = 38.80098009109497
+
+[fixture_metadata]
+case = "saved physical recurrence checkpoint"
+completed_vectors = 306
+cutoff = 1.0e-6
+ground_state_sha256 = "c543cc77c399ad84b340e626bfdf2a1a9480ed04d9948be138672dfa7504eafd"
+length = 23
+max_bond_dimension = 0
+max_current_bond = 915
+progress_sha256 = "27847657836b0901d708b77bbbe90b0f221e3d02ac48a12e6642e068ed41a09a"
+source_segment_uuid = "7b8e354b-f9b6-4ea7-b0bb-8d512a5ebb01"
+target_vectors = 326
+
+[median]
+add_seconds = 1.35737125
+apply_seconds = 3.267663877
+checkpoint_seconds = 0.059997042
+kernel_seconds = 4.693592669
+moments_seconds = 0.069627708
+total_seconds = 4.753361002
+
+[[samples]]
+add_seconds = 1.379313709
+apply_seconds = 3.32506346
+checkpoint_seconds = 0.059997042
+kernel_seconds = 4.774004877
+moments_seconds = 0.069627708
+total_seconds = 4.834001919
+[[samples]]
+add_seconds = 1.261656084
+apply_seconds = 3.192365334
+checkpoint_seconds = 0.0673535
+kernel_seconds = 4.543046043
+moments_seconds = 0.089024625
+total_seconds = 4.610399543
+[[samples]]
+add_seconds = 1.35737125
+apply_seconds = 3.267663877
+checkpoint_seconds = 0.059768333
+kernel_seconds = 4.693592669
+moments_seconds = 0.068557542
+total_seconds = 4.753361002

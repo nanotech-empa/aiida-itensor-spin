@@ -1,0 +1,5 @@
+WARMUP mode=blocks Julia=2 BLAS=1
+SAMPLE 1 kernel=4.774004877 apply=3.32506346 add=1.379313709
+SAMPLE 2 kernel=4.543046043 apply=3.192365334 add=1.261656084
+SAMPLE 3 kernel=4.693592669 apply=3.267663877 add=1.35737125
+RESULT /home/jovyan/work/kernel_benchmark_20261009/local_l23/blocks_j2_b1.toml

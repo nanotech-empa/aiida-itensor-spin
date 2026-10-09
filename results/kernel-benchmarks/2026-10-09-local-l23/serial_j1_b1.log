@@ -1,0 +1,5 @@
+WARMUP mode=serial Julia=1 BLAS=1
+SAMPLE 1 kernel=6.589383211 apply=5.035644294 add=1.432035375
+SAMPLE 2 kernel=6.47571642 apply=4.786435961 add=1.453122126
+SAMPLE 3 kernel=6.225492961 apply=4.51040046 add=1.621158417
+RESULT /home/jovyan/work/kernel_benchmark_20261009/local_l23/serial_j1_b1.toml

@@ -1,0 +1,64 @@
+ITensorMPS_version = "0.4.1"
+ITensors_version = "0.9.30"
+architecture = "aarch64"
+benchmark_script_sha256 = "c3f3be5d089bea68ff4437b59e8f42fdb5abf940bf8d780a8685b4ee96a0d9a0"
+blas_config = "LBTConfig([ILP64] libopenblas64_.so)"
+blas_threads = 4
+cpu_threads_visible = 8
+fixture_sha256 = "97fe0da3c5a6cc3e7e95192f3c2cae647fc216ff285c0beb8f94c48aa2fe8990"
+julia_threads = 1
+julia_version = "1.12.6"
+load_seconds = 2.850912094116211
+max_discarded_weight = 0.0
+memory_total_bytes = 0x07d2a3e000
+mode = "blas"
+moments = [-0.020681351104269774, 0.006615658456627566]
+next_max_bond = 911
+note = "Each repeat starts from identical saved vectors. Warmup and load are excluded from medians. Checkpoint timer is a representative write, not a production I/O benchmark."
+os = "Linux"
+repeats = 3
+strided_threads = 1
+threaded_blocksparse = false
+warmup_seconds = 38.7076940536499
+
+[fixture_metadata]
+case = "saved physical recurrence checkpoint"
+completed_vectors = 306
+cutoff = 1.0e-6
+ground_state_sha256 = "c543cc77c399ad84b340e626bfdf2a1a9480ed04d9948be138672dfa7504eafd"
+length = 23
+max_bond_dimension = 0
+max_current_bond = 915
+progress_sha256 = "27847657836b0901d708b77bbbe90b0f221e3d02ac48a12e6642e068ed41a09a"
+source_segment_uuid = "7b8e354b-f9b6-4ea7-b0bb-8d512a5ebb01"
+target_vectors = 326
+
+[median]
+add_seconds = 1.210464292
+apply_seconds = 3.477428501
+checkpoint_seconds = 0.058857167
+kernel_seconds = 4.555172126
+moments_seconds = 0.045010125
+total_seconds = 4.611757876
+
+[[samples]]
+add_seconds = 1.210464292
+apply_seconds = 3.695092293
+checkpoint_seconds = 0.068798
+kernel_seconds = 4.948801377
+moments_seconds = 0.043244792
+total_seconds = 5.017599377
+[[samples]]
+add_seconds = 1.232652501
+apply_seconds = 3.165332251
+checkpoint_seconds = 0.058857167
+kernel_seconds = 4.442994877
+moments_seconds = 0.045010125
+total_seconds = 4.501852044
+[[samples]]
+add_seconds = 1.031662584
+apply_seconds = 3.477428501
+checkpoint_seconds = 0.05658575
+kernel_seconds = 4.555172126
+moments_seconds = 0.046081041
+total_seconds = 4.611757876

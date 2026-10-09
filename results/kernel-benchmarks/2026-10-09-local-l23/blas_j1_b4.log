@@ -1,0 +1,5 @@
+WARMUP mode=blas Julia=1 BLAS=4
+SAMPLE 1 kernel=4.948801377 apply=3.695092293 add=1.210464292
+SAMPLE 2 kernel=4.442994877 apply=3.165332251 add=1.232652501
+SAMPLE 3 kernel=4.555172126 apply=3.477428501 add=1.031662584
+RESULT /home/jovyan/work/kernel_benchmark_20261009/local_l23/blas_j1_b4.toml
