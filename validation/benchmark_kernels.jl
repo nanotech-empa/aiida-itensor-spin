@@ -116,7 +116,9 @@ function run(o)
     println("WARMUP mode=$mode Julia=$(Threads.nthreads()) BLAS=$(BLAS.get_num_threads())")
     flush(stdout)
     twarm = time()
-    warm, warm_moments, _, _ = step(data, output*".scratch.jld2")
+    warm_data = haskey(o,"--warmup-fixture") ? load(o["--warmup-fixture"]) : data
+    (warm_data["cap"] > 0) == (data["cap"] > 0) || error("Warmup must exercise the same capped/uncapped implementation")
+    warm, warm_moments, _, _ = step(warm_data, output*".scratch.jld2")
     warm_seconds = time()-twarm
     samples = Dict{String,Float64}[]
     next, measured_moments, report = warm, warm_moments, Dict{String,Any}()
@@ -139,6 +141,8 @@ function run(o)
         "fixture_sha256"=>bytes2hex(open(sha256,o["--fixture"])),
         "benchmark_script_sha256"=>bytes2hex(open(sha256,@__FILE__)),
         "fixture_metadata"=>data["metadata"], "load_seconds"=>load_seconds,
+        "warmup_fixture_sha256"=>haskey(o,"--warmup-fixture") ? bytes2hex(open(sha256,o["--warmup-fixture"])) : bytes2hex(open(sha256,o["--fixture"])),
+        "warmup_uses_measured_fixture"=>!haskey(o,"--warmup-fixture"),
         "warmup_seconds"=>warm_seconds, "median"=>summary, "samples"=>samples,
         "moments"=>measured_moments, "next_max_bond"=>maxlinkdim(next),
         "max_discarded_weight"=>get(report,"max_discarded_weight",0.0),

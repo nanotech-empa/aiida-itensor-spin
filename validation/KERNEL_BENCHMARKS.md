@@ -81,3 +81,21 @@ No packages are installed and no production runtime files are replaced.
 Results from Docker Linux on Apple M2 and Daint must be reported separately.
 L23 scaling is not a speedup prediction for the capped L50 or uncapped L101
 production tasks. A representative large-bond checkpoint is needed for that.
+
+`kernel_benchmark_daint_large.sh` provides that separate test: the central
+L50 task 226 (`state 2, site 26, zz`) from completed segment UUID
+`44ed04b9-1589-4781-ad8b-c81f83baef5c`, with cutoff/cap taken from the saved
+checkpoint. It prepares the fixture on Daint, retaining source hashes, rather
+than downloading the roughly 4.7 GB progress file to the Mac. It requests one
+normal node, eight cores, 128 GB memory and at most 12 hours. The first
+configuration is the existing two-thread block mode; eight-thread blocks and
+eight-thread BLAS follow, then four-thread blocks and serial. Here speedups
+use `reference_label` and `speedup_vs_reference`, relative to two threads.
+
+One measured real step per configuration keeps the initial diagnostic cost
+bounded. A separate small QN fixture warms the same capped code path;
+`warmup_fixture_sha256` and `warmup_uses_measured_fixture=false` identify this
+method explicitly. This can leave size-dependent first-use effects and lacks
+the repeat variability estimate of the three-repeat L23 test. Strong
+performance conclusions need repeated representative measurements. Numerical
+comparisons are untimed and may themselves be expensive at these bond sizes.
