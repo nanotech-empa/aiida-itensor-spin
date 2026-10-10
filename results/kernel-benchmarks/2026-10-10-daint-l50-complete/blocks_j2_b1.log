@@ -1,0 +1,4 @@
+WARMUP mode=blocks Julia=2 BLAS=1
+WARNING: max bond dimension reached at iteration=1 operation=hamiltonian bond=8 maxdim=32 discarded_weight=0.05264750994290228 requested_cutoff=1.0e-8
+SAMPLE 1 kernel=2165.198332731 apply=1390.783690424 add=724.885742144
+RESULT /ritom/scratch/cscs/cpi/goncalo/kernel_benchmark_20261009_1ad9c3a/results-5015465/physical/blocks_j2_b1.toml
