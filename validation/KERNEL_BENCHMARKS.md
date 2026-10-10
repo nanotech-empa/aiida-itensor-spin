@@ -99,3 +99,44 @@ method explicitly. This can leave size-dependent first-use effects and lacks
 the repeat variability estimate of the three-repeat L23 test. Strong
 performance conclusions need repeated representative measurements. Numerical
 comparisons are untimed and may themselves be expensive at these bond sizes.
+
+## Repeated BLAS confirmation and concurrent workers
+
+The completed initial grid found BLAS 8 fastest on the saved L50 step:
+10.192 minutes versus 36.087 for block 2, with relative vector residual
+5.804e-15. Evidence is in `results/kernel-benchmarks/2026-10-10-daint-l50-complete/`.
+`kernel_benchmark_daint_confirm.sh` tests whether that result survives a full
+physical warmup, repetition, and competition between six workers.
+
+It requests one normal node, six tasks with eight CPU cores each, 384 GB
+memory and an eight-hour maximum. Each step requests 64 GB. The conservative
+memory request leaves headroom for measurement; it is not a production
+memory recommendation. [Slurm's step resource controls](https://slurm.schedmd.com/srun.html)
+provide disjoint resources through `--exact`/`--exclusive`; each worker's
+logical CPU affinity is also recorded and checked for overlap.
+
+Stages are: a small concurrent smoke test; isolated BLAS 8 with full physical
+warmup and three repetitions; six simultaneous BLAS 8 workers with two
+repetitions each; then the existing block-2 reference with full physical
+warmup and three repetitions. All repetitions start from the same saved
+vectors rather than advancing the recurrence. The existing large fixture,
+small fixture and previous reference remain read-only in the original
+deployment and are verified against `SOURCE_INPUT_SHA256SUMS`.
+
+Concurrent workers publish readiness only after completing full warmup.
+A shared release marker starts the measurement phase together. Load/warmup
+and barrier waits are excluded. Kernel times remain separate from the
+measurement wall window, which includes GC and representative writes.
+Moment residuals are checked across all six workers; full vector comparisons
+are performed for workers 1 and 6. The comparison itself uses BLAS 8 and
+records that choice, with the same subtraction formula/cutoff as before.
+
+`summarize_concurrent_kernels.jl` reports each worker's slowdown, CPU affinity,
+peak process RSS and aggregate step rate. Peak RSS is recorded before the
+final result export, and summing individual peaks does not measure
+simultaneous node usage; use Slurm accounting as additional evidence.
+Six identical replicas provide a contention diagnostic. They do not represent
+the mixture of different channel/state checkpoints in production or establish
+an accepted whole-node memory limit. `summarize_kernel_confirmation.jl` combines
+the repeated comparison and the concurrent diagnostics. No deployed engine,
+production WorkChain, cutoff, bond cap, or energy window is changed.

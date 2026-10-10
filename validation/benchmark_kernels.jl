@@ -18,6 +18,35 @@ function configure(mode, blas_threads)
     mode == "blas" && Threads.nthreads() != 1 && error("BLAS mode uses one Julia thread")
 end
 
+function linux_process_info()
+    Sys.islinux() || return Dict{String,Any}()
+    status = read("/proc/self/status", String)
+    rss = match(r"(?m)^VmHWM:\s+(\d+)\s+kB", status)
+    cpus = match(r"(?m)^Cpus_allowed_list:\s+(\S+)", status)
+    info = Dict{String,Any}()
+    isnothing(rss) || (info["rss_high_water_kib_before_final_save"] = parse(Int, rss[1]))
+    isnothing(cpus) || (info["cpu_affinity_logical_ids"] = cpus[1])
+    return info
+end
+
+function wait_for_barrier(o)
+    haskey(o, "--barrier-directory") || return 0.0
+    directory = o["--barrier-directory"]
+    id = parse(Int, o["--barrier-id"])
+    workers = parse(Int, o["--barrier-workers"])
+    1 <= id <= workers || error("Invalid barrier worker id/count")
+    isdir(directory) || error("Barrier directory must be created by the coordinator")
+    ready = joinpath(directory, "ready-$id")
+    isfile(ready) && error("Refusing to reuse barrier readiness marker")
+    write(ready, string(time()))
+    started = time()
+    while !isfile(joinpath(directory, "release"))
+        time() - started <= 1800 || error("Barrier release timed out")
+        sleep(0.25)
+    end
+    return time() - started
+end
+
 function prepare(o)
     Random.seed!(20260724)
     configure("serial", 1)
@@ -120,8 +149,10 @@ function run(o)
     (warm_data["cap"] > 0) == (data["cap"] > 0) || error("Warmup must exercise the same capped/uncapped implementation")
     warm, warm_moments, _, _ = step(warm_data, output*".scratch.jld2")
     warm_seconds = time()-twarm
+    barrier_wait_seconds = wait_for_barrier(o)
     samples = Dict{String,Float64}[]
     next, measured_moments, report = warm, warm_moments, Dict{String,Any}()
+    measurements_started_at_unix = time()
     for sample in 1:repeats
         GC.gc()
         next, measured_moments, timings, report = step(data, output*".scratch.jld2")
@@ -129,6 +160,7 @@ function run(o)
         println("SAMPLE $sample kernel=$(timings["kernel_seconds"]) apply=$(timings["apply_seconds"]) add=$(timings["add_seconds"])")
         flush(stdout)
     end
+    measurements_finished_at_unix = time()
     summary = Dict(key=>median([s[key] for s in samples]) for key in keys(samples[1]))
     result = Dict{String,Any}(
         "mode"=>mode, "julia_threads"=>Threads.nthreads(), "blas_threads"=>BLAS.get_num_threads(),
@@ -144,10 +176,16 @@ function run(o)
         "warmup_fixture_sha256"=>haskey(o,"--warmup-fixture") ? bytes2hex(open(sha256,o["--warmup-fixture"])) : bytes2hex(open(sha256,o["--fixture"])),
         "warmup_uses_measured_fixture"=>!haskey(o,"--warmup-fixture"),
         "warmup_seconds"=>warm_seconds, "median"=>summary, "samples"=>samples,
+        "barrier_wait_seconds"=>barrier_wait_seconds,
+        "barrier_enabled"=>haskey(o,"--barrier-directory"),
+        "measurements_started_at_unix"=>measurements_started_at_unix,
+        "measurements_finished_at_unix"=>measurements_finished_at_unix,
+        "measurements_elapsed_seconds"=>measurements_finished_at_unix-measurements_started_at_unix,
         "moments"=>measured_moments, "next_max_bond"=>maxlinkdim(next),
         "max_discarded_weight"=>get(report,"max_discarded_weight",0.0),
         "repeats"=>repeats,
         "note"=>"Each repeat starts from identical saved vectors. Warmup and load are excluded from medians. Checkpoint timer is a representative write, not a production I/O benchmark.")
+    merge!(result, linux_process_info())
     jldsave(output*".jld2"; next, measured_moments)
     open(output*".toml","w") do io
         TOML.print(io,result; sorted=true)
@@ -156,12 +194,13 @@ function run(o)
 end
 
 function compare(o)
-    configure("serial", 1)
+    configure(get(o,"--mode","serial"), parse(Int,get(o,"--blas-threads","1")))
     a,b = load(o["--reference"]),load(o["--candidate"])
     # Stable explicit subtraction avoids subtracting nearly equal scalar norms.
     relative_vector_error = norm(add(a["next"],-b["next"]; cutoff=1e-14))/norm(a["next"])
     moment_error = maximum(abs.(a["measured_moments"]-b["measured_moments"]))
-    result=Dict("relative_vector_error"=>relative_vector_error,"moment_max_abs_error"=>moment_error)
+    result=Dict("relative_vector_error"=>relative_vector_error,"moment_max_abs_error"=>moment_error,
+        "comparison_blas_threads"=>BLAS.get_num_threads(),"comparison_julia_threads"=>Threads.nthreads())
     open(o["--output"],"w") do io; TOML.print(io,result); end
     println(result)
 end
