@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/nanotech-empa/aiida-itensor-spin",
+  "branch": "perf/single-task-kernels",
+  "commit": "558e1df497605d1a8fe8d15695818ef18dfc5955",
+  "source_checkpoint_uuid": "44ed04b9-1589-4781-ad8b-c81f83baef5c",
+  "task": 226,
+  "goal": "full warmup, three repeated BLAS/baseline steps, six concurrent BLAS replicas"
+}

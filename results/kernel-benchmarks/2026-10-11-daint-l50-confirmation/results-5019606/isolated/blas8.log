@@ -1,0 +1,5 @@
+WARMUP mode=blas Julia=1 BLAS=8
+SAMPLE 1 kernel=602.886265464 apply=421.180406473 add=169.123876261
+SAMPLE 2 kernel=599.76810958 apply=420.171807645 add=167.380023108
+SAMPLE 3 kernel=599.654581027 apply=420.665419615 add=166.753059971
+RESULT /ritom/scratch/cscs/cpi/goncalo/kernel_confirm_20261010_558e1df/results-5019606/isolated/blas8.toml

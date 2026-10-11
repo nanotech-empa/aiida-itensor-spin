@@ -1,0 +1,65 @@
+{
+  "assignment": {
+    "active_workers": 12,
+    "idle_workers": 0,
+    "maximum_estimated_recurrence_units": 371,
+    "maximum_tasks_per_worker": 1,
+    "minimum_estimated_recurrence_units": 349,
+    "minimum_tasks_per_worker": 1,
+    "pending_tasks": 12,
+    "policy": "unfinished-greedy-recurrence-balance-v1",
+    "worker_task_ids": [
+      [
+        226
+      ],
+      [
+        76
+      ],
+      [
+        73
+      ],
+      [
+        223
+      ],
+      [
+        77
+      ],
+      [
+        78
+      ],
+      [
+        227
+      ],
+      [
+        228
+      ],
+      [
+        74
+      ],
+      [
+        75
+      ],
+      [
+        224
+      ],
+      [
+        225
+      ]
+    ]
+  },
+  "elapsed_seconds": 1968.3916206359863,
+  "format_version": 1,
+  "imported_final_tasks": 288,
+  "imported_progress_checkpoints": 300,
+  "layout": {
+    "internal_stop_seconds": 43200,
+    "nodes": 2,
+    "partition": "normal",
+    "processes_per_node": 10,
+    "threads_per_process": 2,
+    "wallclock_seconds": 50400
+  },
+  "phase": "worker-step-finished",
+  "segment_index": 5,
+  "slurm_job_id": "5024541"
+}

@@ -1,0 +1,1 @@
+Dict{String, Real}("relative_vector_error" => 0.0, "moment_max_abs_error" => 0.0, "comparison_julia_threads" => 1, "comparison_blas_threads" => 8)

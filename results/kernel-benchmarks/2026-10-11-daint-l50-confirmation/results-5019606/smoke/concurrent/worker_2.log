@@ -1,0 +1,7 @@
+WARMUP mode=blas Julia=1 BLAS=8
+WARNING: max bond dimension reached at iteration=1 operation=hamiltonian bond=8 maxdim=32 discarded_weight=0.052647509942902335 requested_cutoff=1.0e-8
+WARNING: max bond dimension reached at iteration=1 operation=hamiltonian bond=8 maxdim=32 discarded_weight=0.052647509942902335 requested_cutoff=1.0e-8
+SAMPLE 1 kernel=0.043258214 apply=0.026744989 add=0.015052184
+WARNING: max bond dimension reached at iteration=1 operation=hamiltonian bond=8 maxdim=32 discarded_weight=0.052647509942902335 requested_cutoff=1.0e-8
+SAMPLE 2 kernel=0.041505437 apply=0.025455654 add=0.014653924
+RESULT /ritom/scratch/cscs/cpi/goncalo/kernel_confirm_20261010_558e1df/results-5019606/smoke/concurrent/worker_2.toml

@@ -1,0 +1,12 @@
+completed_steps_per_hour_including_gc_and_representative_writes = 26.80521774045818
+cpu_affinity_logical_ids_by_worker = ["0-7", "40-47", "8-15", "16-23", "24-31", "32-39"]
+fixture_sha256 = "88ecbb4bd1aa116c593641ac6e536c7faa01320cfb7725845af3d536804808b1"
+kernel_median_seconds_by_worker = [784.5444679350001, 802.4665811325, 791.101907128, 792.3085305825, 776.4938839765, 774.2949914105]
+kernel_slowdown_vs_isolated_by_worker = [1.308079665129901, 1.3379614026068238, 1.319012955993918, 1.3210247726197553, 1.2946568374905025, 1.290990599604764]
+max_abs_moment_difference_vs_isolated = 0.0
+measured_steps = 12
+measurement_window_seconds = 1611.6265280246735
+note = "Identical input replicated across workers: a contention diagnostic, not the heterogeneous production workload. Warmup and load excluded; measurement window includes GC and representative writes, not final result export. Summed individual peak RSS is not a simultaneous node-memory measurement."
+rss_high_water_kib_by_worker = [43907008, 43858880, 43956160, 44100224, 43892864, 43892928]
+throughput_vs_ideal_independent_workers = 0.7498800222064443
+workers = 6

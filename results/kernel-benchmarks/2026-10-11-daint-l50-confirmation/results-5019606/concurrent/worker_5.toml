@@ -1,0 +1,66 @@
+ITensorMPS_version = "0.4.1"
+ITensors_version = "0.9.30"
+architecture = "aarch64"
+barrier_enabled = true
+barrier_wait_seconds = 15.595091104507446
+benchmark_script_sha256 = "fc71152d4898b55200c6f90e55aae0292d46532f9bf5de5dc66c465cd54624d6"
+blas_config = "LBTConfig([ILP64] libopenblas64_.so)"
+blas_threads = 8
+cpu_affinity_logical_ids = "24-31"
+cpu_threads_visible = 288
+fixture_sha256 = "88ecbb4bd1aa116c593641ac6e536c7faa01320cfb7725845af3d536804808b1"
+julia_threads = 1
+julia_version = "1.12.6"
+load_seconds = 5.077329158782959
+max_discarded_weight = 9.998967844943246e-9
+measurements_elapsed_seconds = 1559.6677389144897
+measurements_finished_at_unix = 1.791618932155521e9
+measurements_started_at_unix = 1.791617372487782e9
+memory_total_bytes = 0xd60d3d0000
+mode = "blas"
+moments = [-0.045626939649665105, 0.07238420442142607]
+next_max_bond = 7659
+note = "Each repeat starts from identical saved vectors. Warmup and load are excluded from medians. Checkpoint timer is a representative write, not a production I/O benchmark."
+os = "Linux"
+repeats = 2
+rss_high_water_kib_before_final_save = 43892864
+strided_threads = 1
+threaded_blocksparse = false
+warmup_fixture_sha256 = "88ecbb4bd1aa116c593641ac6e536c7faa01320cfb7725845af3d536804808b1"
+warmup_seconds = 878.8386898040771
+warmup_uses_measured_fixture = true
+
+[fixture_metadata]
+case = "saved physical recurrence checkpoint"
+completed_vectors = 325
+cutoff = 1.0e-8
+ground_state_sha256 = "7d3dc9109d59216451a02d1b40227376430b333081fc0c9d6e2fb066b482c32b"
+length = 50
+max_bond_dimension = 8000
+max_current_bond = 7737
+progress_sha256 = "1c6229acc01169aa2afd70aadd334e15d2ab6c07b5157c5f35f5be6de3014dbc"
+source_segment_uuid = "44ed04b9-1589-4781-ad8b-c81f83baef5c"
+target_vectors = 720
+
+[median]
+add_seconds = 217.9247402545
+apply_seconds = 545.09299214
+checkpoint_seconds = 2.9317974545
+kernel_seconds = 776.4938839765
+moments_seconds = 13.476151582
+total_seconds = 779.425681431
+
+[[samples]]
+add_seconds = 207.838815611
+apply_seconds = 543.339827449
+checkpoint_seconds = 2.789913054
+kernel_seconds = 764.202682333
+moments_seconds = 13.024039273
+total_seconds = 766.992595387
+[[samples]]
+add_seconds = 228.010664898
+apply_seconds = 546.846156831
+checkpoint_seconds = 3.073681855
+kernel_seconds = 788.78508562
+moments_seconds = 13.928263891
+total_seconds = 791.858767475

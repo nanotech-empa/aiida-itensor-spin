@@ -1,0 +1,5 @@
+WARMUP mode=blocks Julia=2 BLAS=1
+SAMPLE 1 kernel=2172.905333657 apply=1392.311523828 add=730.718488145
+SAMPLE 2 kernel=2166.43575751 apply=1388.406330007 add=728.140540403
+SAMPLE 3 kernel=2164.801650559 apply=1386.641228302 add=728.411752302
+RESULT /ritom/scratch/cscs/cpi/goncalo/kernel_confirm_20261010_558e1df/results-5019606/isolated/blocks2.toml

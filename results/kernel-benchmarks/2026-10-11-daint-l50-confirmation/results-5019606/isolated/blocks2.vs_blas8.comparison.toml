@@ -1,0 +1,4 @@
+relative_vector_error = 5.741693873163899e-15
+moment_max_abs_error = 1.9984014443252818e-15
+comparison_julia_threads = 1
+comparison_blas_threads = 8
