@@ -1,0 +1,22 @@
+srun: error: nid005860: task 2: Out Of Memory
+srun: Terminating StepId=5024541.0
+srun: error: nid005867: tasks 6-11: Terminated
+srun: Force Terminated StepId=5024541.0
+itensor-spin-segment: Command '['srun', '--exclusive', '--exact', '--nodes=2', '--ntasks=12', '--ntasks-per-node=10', '--cpus-per-task=2', '--cpu-bind=cores', '--distribution=block:block', '--output=state/workers/worker_%t/stdout.txt', '--error=state/workers/worker_%t/stderr.txt', '/ritom/scratch/cscs/cpi/goncalo/aiida_itensor_spin_0.4.3_bondcap_20261005/engine/run_segment_rank.sh', '/ritom/scratch/cscs/cpi/aiida/03/8f/41d4-c064-429d-8901-bbb739769684/gs_checkpoint.jld2', 'state/workers', '/ritom/scratch/cscs/cpi/goncalo/aiida_itensor_spin_0.4.3_bondcap_20261005/engine', 'streaming', 'blocksparse']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/ritom/scratch/cscs/cpi/goncalo/aiida_itensor_spin_0.4.3_bondcap_20261005/engine/itensor-spin-segment", line 588, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/ritom/scratch/cscs/cpi/goncalo/aiida_itensor_spin_0.4.3_bondcap_20261005/engine/itensor-spin-segment", line 495, in main
+    run_workers_with_monitor(
+    ~~~~~~~~~~~~~~~~~~~~~~~~^
+        worker_command,
+        ^^^^^^^^^^^^^^^
+    ...<14 lines>...
+        worker_root,
+        ^^^^^^^^^^^^
+    )
+    ^
+  File "/ritom/scratch/cscs/cpi/goncalo/aiida_itensor_spin_0.4.3_bondcap_20261005/engine/itensor-spin-segment", line 284, in run_workers_with_monitor
+    raise subprocess.CalledProcessError(return_code, command)
+subprocess.CalledProcessError: Command '['srun', '--exclusive', '--exact', '--nodes=2', '--ntasks=12', '--ntasks-per-node=10', '--cpus-per-task=2', '--cpu-bind=cores', '--distribution=block:block', '--output=state/workers/worker_%t/stdout.txt', '--error=state/workers/worker_%t/stderr.txt', '/ritom/scratch/cscs/cpi/goncalo/aiida_itensor_spin_0.4.3_bondcap_20261005/engine/run_segment_rank.sh', '/ritom/scratch/cscs/cpi/aiida/03/8f/41d4-c064-429d-8901-bbb739769684/gs_checkpoint.jld2', 'state/workers', '/ritom/scratch/cscs/cpi/goncalo/aiida_itensor_spin_0.4.3_bondcap_20261005/engine', 'streaming', 'blocksparse']' returned non-zero exit status 1.
