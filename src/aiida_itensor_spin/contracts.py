@@ -124,7 +124,15 @@ def normalize_resource_limits(value: Mapping[str, Any]) -> dict[str, Any]:
     partition = str(value.get("partition", "normal"))
     if not partition:
         raise ContractError("partition cannot be empty")
+    explicit_threads = None
+    if "threads_per_process" in value:
+        explicit_threads = _integer(value, "threads_per_process", minimum=1)
+        if explicit_threads > max_threads:
+            raise ContractError("threads_per_process exceeds max_threads_per_process")
+        if explicit_threads * max_processes > MAX_CORES_PER_DAINT_NODE:
+            raise ContractError("explicit thread layout exceeds 288 physical cores per node")
     return {
+        **({"threads_per_process": explicit_threads} if explicit_threads is not None else {}),
         "max_nodes": max_nodes,
         "max_processes_per_node": max_processes,
         "max_threads_per_process": max_threads,
@@ -152,7 +160,7 @@ def select_largest_feasible_layout(
     processes_per_node = min(limits["max_processes_per_node"], workers)
     nodes = (workers + processes_per_node - 1) // processes_per_node
     threads_per_process = min(
-        RECOMMENDED_THREADS_PER_PROCESS,
+        limits.get("threads_per_process", RECOMMENDED_THREADS_PER_PROCESS),
         limits["max_threads_per_process"],
         MAX_CORES_PER_DAINT_NODE // processes_per_node,
     )
@@ -182,6 +190,16 @@ def normalize_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
     threading_mode = str(value.get("threading_mode", "blocksparse")).lower()
     if threading_mode not in ALLOWED_THREADING_MODES:
         raise ContractError(f"threading_mode must be one of {sorted(ALLOWED_THREADING_MODES)}")
+
+    kernel_mode = value.get("kernel_threading_mode", "legacy")
+    if kernel_mode not in {"legacy", "blas"}:
+        raise ContractError("kernel_threading_mode must be legacy or blas")
+    if kernel_mode == "blas":
+        _integer(value, "blas_threads", minimum=1)
+        if threading_mode != "blocksparse":
+            raise ContractError("BLAS continuation requires blocksparse checkpoint compatibility")
+    elif "blas_threads" in value:
+        raise ContractError("blas_threads requires kernel_threading_mode=blas")
 
     checkpoint_every = (
         _integer(value, "checkpoint_every", minimum=1) if "checkpoint_every" in value else 1

@@ -4,6 +4,7 @@ using ITensorMPS, ITensors
 using LinearAlgebra
 using Dates
 using JLD2
+using LinearAlgebra
 using ..Operators
 using ..SpectralFunction
 
@@ -69,6 +70,9 @@ function Chebyshev_moments_streaming(
             checkpoint_format_version=CHECKPOINT_FORMAT_VERSION,
             moment_convention=MOMENT_CONVENTION,
             checkpoint_key,
+            kernel_threading_mode=get(ENV, "ITENSOR_SPIN_KERNEL_THREADING_MODE", "legacy"),
+            julia_threads=Threads.nthreads(),
+            blas_threads=BLAS.get_num_threads(),
             completed_n,
             N,
             cutoff,
