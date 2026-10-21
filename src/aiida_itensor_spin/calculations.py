@@ -9,6 +9,7 @@ from aiida.common import CalcInfo, CodeInfo
 from aiida.engine import CalcJob
 
 from .contracts import normalize_ground_state_parameters, normalize_layout, normalize_parameters
+from .graphs import GRAPH_MODEL_IDENTIFIER
 
 
 class GroundStateCalculation(CalcJob):
@@ -36,6 +37,10 @@ class GroundStateCalculation(CalcJob):
 
     def prepare_for_submission(self, folder):
         parameters = normalize_ground_state_parameters(self.inputs.parameters.get_dict())
+        if parameters["model"] == GRAPH_MODEL_IDENTIFIER and not self.inputs.code.base.extras.get(
+            "supports_spin_graph", False
+        ):
+            raise ValueError("Choose an isolated spin-graph-capable ground-state Code")
         resources = self.inputs.metadata.options.resources
         threads = int(resources.get("num_cores_per_mpiproc", 1))
         with folder.open("ground_state.json", "w", encoding="utf8") as handle:

@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from pathlib import PurePosixPath
 from typing import Any
 
+from .graphs import GRAPH_MODEL_IDENTIFIER, normalize_spin_graph
+
 STATUS_FORMAT_VERSION = 1
 MAX_CORES_PER_DAINT_NODE = 288
 RECOMMENDED_THREADS_PER_PROCESS = 2
@@ -15,7 +17,7 @@ ALLOWED_THREADING_MODES = {"outer", "blocksparse"}
 MOMENT_CONVENTION = "chebyshev-2n-minus-1-v2"
 MODEL_IDENTIFIER = "spin1_chain_spinhalf_impurity_v1"
 MIXED_MODEL_IDENTIFIER = "mixed_spin_heisenberg_chain_v1"
-REGISTERED_MODELS = {MODEL_IDENTIFIER, MIXED_MODEL_IDENTIFIER}
+REGISTERED_MODELS = {MODEL_IDENTIFIER, MIXED_MODEL_IDENTIFIER, GRAPH_MODEL_IDENTIFIER}
 
 GROUND_STATE_DEFAULTS = {
     "model": MODEL_IDENTIFIER,
@@ -371,11 +373,17 @@ def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any
             **common,
         }
 
-    site_spins = _normalize_site_spins(value.get("site_spins"))
+    graph = None
+    if model == GRAPH_MODEL_IDENTIFIER:
+        try:
+            graph = normalize_spin_graph(value)
+        except (TypeError, ValueError) as exception:
+            raise ContractError(str(exception)) from exception
+    site_spins = graph["site_spins"] if graph is not None else _normalize_site_spins(value.get("site_spins"))
     length = len(site_spins)
-    if "length" in value and _integer(value, "length", minimum=3) != length:
+    if "length" in value and _integer(value, "length", minimum=2 if graph is not None else 3) != length:
         raise ContractError("length must equal len(site_spins)")
-    couplings = _normalize_couplings(value.get("couplings_meV"), length)
+    topology = graph if graph is not None else {"couplings_meV": _normalize_couplings(value.get("couplings_meV"), length)}
     twice_spins = [round(2 * spin) for spin in site_spins]
     target = value.get("target_twice_sz", sum(twice_spins) % 2)
     if isinstance(target, bool) or not isinstance(target, int):
@@ -386,7 +394,7 @@ def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any
         "model": model,
         "length": length,
         "site_spins": site_spins,
-        "couplings_meV": couplings,
+        **topology,
         "target_twice_sz": target,
         **common,
     }
@@ -409,7 +417,7 @@ def build_sector_ensemble_plan(
             "target_twice_sz must be supplied through requested_sectors for an ensemble"
         )
     normalized = normalize_ground_state_parameters(ground_state_parameters)
-    if normalized["model"] != MIXED_MODEL_IDENTIFIER:
+    if normalized["model"] not in {MIXED_MODEL_IDENTIFIER, GRAPH_MODEL_IDENTIFIER}:
         raise ContractError(f"sector ensembles currently require model {MIXED_MODEL_IDENTIFIER!r}")
     if not isinstance(requested_sectors, list) or not requested_sectors:
         raise ContractError("requested_sectors must be a non-empty list")

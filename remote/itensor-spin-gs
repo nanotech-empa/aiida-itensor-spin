@@ -13,6 +13,7 @@ DEFAULT_CASE_ROOT = Path("/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_
 DEFAULT_JULIA = Path("/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia")
 LEGACY_MODEL = "spin1_chain_spinhalf_impurity_v1"
 MIXED_MODEL = "mixed_spin_heisenberg_chain_v1"
+GRAPH_MODEL = "mixed_spin_heisenberg_graph_v1"
 
 
 def model_command(parameters, case_root):
@@ -29,6 +30,12 @@ def model_command(parameters, case_root):
             str(parameters["JL_meV"]),
             "--JR-meV",
             str(parameters["JR_meV"]),
+        ]
+    if model == GRAPH_MODEL:
+        return case_root / "prepare_mixed_spin_gs.jl", [
+            "--two-spins", ",".join(str(round(2 * spin)) for spin in parameters["site_spins"]),
+            "--exchange-edges", ";".join(f"{e['i']},{e['j']},{e['J_meV']}" for e in parameters["exchange_edges"]),
+            "--target-twice-sz", str(parameters["target_twice_sz"]),
         ]
     if model == MIXED_MODEL:
         two_spins = [round(2 * spin) for spin in parameters["site_spins"]]
@@ -67,7 +74,7 @@ def main():
     case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))
     julia = Path(os.environ.get("ITENSOR_SPIN_JULIA", DEFAULT_JULIA))
     script, model_arguments = model_command(parameters, case_root)
-    if scan_only and model != MIXED_MODEL:
+    if scan_only and model not in {MIXED_MODEL, GRAPH_MODEL}:
         raise RuntimeError("sector scan mode requires the mixed-spin model")
     environment = os.environ.copy()
     environment.update(
@@ -167,7 +174,7 @@ def main():
             "elapsed_seconds": time.time() - started,
             "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
             "site_spins": parameters["site_spins"],
-            "couplings_meV": parameters["couplings_meV"],
+            **({"exchange_edges": parameters["exchange_edges"]} if model == GRAPH_MODEL else {"couplings_meV": parameters["couplings_meV"]}),
             "target_twice_sz": parameters["target_twice_sz"],
         }
         Path("gs_status.json").write_text(
@@ -217,7 +224,7 @@ def main():
         status.update(
             {
                 "site_spins": parameters["site_spins"],
-                "couplings_meV": parameters["couplings_meV"],
+                **({"exchange_edges": parameters["exchange_edges"]} if model == GRAPH_MODEL else {"couplings_meV": parameters["couplings_meV"]}),
                 "target_twice_sz": parameters["target_twice_sz"],
             }
         )

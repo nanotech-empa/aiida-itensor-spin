@@ -319,3 +319,34 @@ workflow.
 Earlier WorkChains and Daint files using the old `2N`-slot convention are
 retained for provenance and debugging only. Their last moment was an untouched
 zero, so they are not scientific references for v2.
+
+## Explicit spin-graph model (development)
+
+`mixed_spin_heisenberg_graph_v1` takes `site_spins` plus `exchange_edges`, each an
+object with one-based `i`, `j`, and finite `J_meV`. Optional `site_positions` preserve
+the drawing independently of Hamiltonian construction. Connections are undirected,
+canonicalized and sorted; self connections and repeated pairs are rejected.
+Mixed integer/half-integer spins, branches, loops and non-neighbour exchanges are
+supported by the isotropic H = Σ J_ij S_i·S_j adapter. Positive J is antiferromagnetic.
+The site order is explicit and fixed, with no heuristic reordering in this version.
+
+Graph inputs require an isolated ground-state Code declaring `supports_spin_graph`.
+The existing chain and impurity adapters retain their input contracts. The graph
+adapter reuses the conserved-Sz and total-S² machinery for isotropic exchange;
+it makes no reflection or bipartite-graph assumption. General graphs may require
+more bond dimension and convergence checks than chains. No production code,
+checkpoint, deployment, installed package or daemon was changed for this preview.
+
+`validation/check_spin_graph.py` generates independent dense reference spectra.
+`validation/test_spin_graph.jl` checks graph MPO eigenvalues and DMRG ground energies
+for a triangle, mixed-spin branch, longer-range graph and dimer.
+`validation/compare_graph_spectrum.py` exercises the standalone ground-state,
+checkpoint, local spectral-worker and collection path on a four-spin graph, then
+compares against independent exact poles reconstructed using the inherited
+Chebyshev/Jackson convention. It can take a prior test directory as a second
+argument to validate continuation from saved test checkpoints. Keep its internal
+window above the existing 600-second minimum forecast margin.
+
+These are isolated numerical integration checks, not a claim of end-to-end app/
+AiiDA-daemon validation or a production deployment. The active environment is below
+the modern support floor and was deliberately not upgraded while L50 is active.

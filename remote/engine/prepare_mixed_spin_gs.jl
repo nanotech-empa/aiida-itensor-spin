@@ -1,7 +1,7 @@
 ###############################################################################
-# Ground-state preparation for a nearest-neighbour mixed-spin Heisenberg chain.
+# Ground-state preparation for mixed-spin Heisenberg chains and explicit graphs.
 #
-# H = sum_i J_i S_i . S_(i+1)
+# H = sum_(i,j) J_ij S_i . S_j
 ###############################################################################
 using Dates
 using LinearAlgebra
@@ -12,6 +12,8 @@ using JLD2
 
 const CASE_ROOT = @__DIR__
 include(joinpath(CASE_ROOT, "ITensor_libs", "Imports.jl"))
+include(joinpath(CASE_ROOT, "SpinGraphHamiltonian.jl"))
+using .SpinGraphHamiltonian
 
 function parse_options(args)
     options = Dict{String,String}()
@@ -60,16 +62,18 @@ isempty(output_dir) && error("Required option: --output DIR")
 mkpath(output_dir)
 
 model = get(options, "--model", "")
-model == "mixed_spin_heisenberg_chain_v1" || error("Unsupported model: $model")
+model in ("mixed_spin_heisenberg_chain_v1", "mixed_spin_heisenberg_graph_v1") || error("Unsupported model: $model")
+is_graph = model == "mixed_spin_heisenberg_graph_v1"
 seed = parse(Int, get(options, "--seed", "20260724"))
 two_spins = parse_csv(Int, options["--two-spins"], "--two-spins")
 all(two_s -> two_s >= 1, two_spins) || error("--two-spins values must be positive")
 L = length(two_spins)
-L >= 3 || error("Require at least three sites")
+L >= (is_graph ? 2 : 3) || error("Too few sites for the selected model")
 site_spins = two_spins ./ 2
-couplings_meV = parse_csv(Float64, options["--couplings-meV"], "--couplings-meV")
-length(couplings_meV) == L - 1 ||
-    error("--couplings-meV must contain exactly L-1 entries")
+couplings_meV = is_graph ? Float64[] : parse_csv(Float64, options["--couplings-meV"], "--couplings-meV")
+is_graph || length(couplings_meV) == L - 1 || error("--couplings-meV must contain exactly L-1 entries")
+exchange_edges = is_graph ? parse_exchange_edges(options["--exchange-edges"], L) :
+    [(i, i + 1, J) for (i, J) in enumerate(couplings_meV)]
 target_twice_sz = parse(Int, options["--target-twice-sz"])
 abs(target_twice_sz) <= sum(two_spins) ||
     error("--target-twice-sz lies outside the physical range")
@@ -107,7 +111,8 @@ fw = open(summary_filename, "w")
 write(fw, "# Model and physical parameters:\n")
 write(fw, "model = $model\n")
 write(fw, "L = $L\nsite spins = $site_spins\n")
-write(fw, "couplings = $couplings_meV meV\n")
+write(fw, "exchange edges (i,j,J_meV) = $exchange_edges\n")
+is_graph || write(fw, "couplings = $couplings_meV meV\n")
 write(fw, "target twice Sz = $target_twice_sz\n")
 write(fw, "temperature = $T K\nomega max = $ωmax meV\n")
 write(fw, "omega smearing = $ω_smearing meV\n\n")
@@ -120,7 +125,7 @@ sites = [
     siteind("GenericSpin"; two_s=two_s, conserve_sz=true)
     for two_s in two_spins
 ]
-H = mixed_heisenberg_hamiltonian(couplings_meV, sites)
+H = is_graph ? graph_heisenberg_hamiltonian(exchange_edges, sites) : mixed_heisenberg_hamiltonian(couplings_meV, sites)
 S2 = Operators.S2_op(sites)
 Sz = Operators.Sz_op(sites)
 
@@ -212,6 +217,7 @@ jldsave(
     site_spins,
     two_spins,
     couplings_meV,
+    exchange_edges,
     target_twice_sz,
     linkdim,
     cutoff,
