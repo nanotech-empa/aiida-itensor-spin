@@ -3,8 +3,8 @@
 #
 # The complete workload is derived from the GS checkpoint:
 #   (symmetrized ground state, site, channel), channel ∈ (zz, pm, mp).
-# Rank r receives task IDs r+1, r+1+Nworkers, ... . No system size is
-# hardcoded, and the ground state is never recomputed here.
+# Each rank receives an explicit manifest of unfinished task IDs. No system
+# size is hardcoded, and the ground state is never recomputed here.
 ###############################################################################
 using Dates
 using JLD2
@@ -78,12 +78,29 @@ function task_filename(output_dir, task)
     )
 end
 
+function read_task_ids(filename)
+    isfile(filename) || error("Task manifest is missing: $filename")
+    task_ids = Int[]
+    for line in eachline(filename)
+        value = strip(line)
+        isempty(value) && continue
+        task_id = tryparse(Int, value)
+        task_id === nothing && error("Invalid task ID in manifest $filename: $value")
+        push!(task_ids, task_id)
+    end
+    isempty(task_ids) && error("Task manifest is empty: $filename")
+    length(unique(task_ids)) == length(task_ids) ||
+        error("Task manifest contains duplicate IDs: $filename")
+    return task_ids
+end
+
 function main(args)
 options = parse_options(args)
 checkpoint_filename = abspath(required_option(options, "--checkpoint"))
 output_dir = abspath(required_option(options, "--output"))
 worker_rank = parse(Int, required_option(options, "--worker-rank"))
 worker_count = parse(Int, required_option(options, "--worker-count"))
+task_ids_filename = abspath(required_option(options, "--task-ids-file"))
 resume = lowercase(get(options, "--resume", "false")) in ("1", "true", "yes")
 backend = lowercase(get(options, "--backend", "full"))
 backend in ("full", "streaming") ||
@@ -124,7 +141,8 @@ required_keys = (
     "L",
     "i_imp",
     "J",
-    "Jp",
+    "JL",
+    "JR",
     "cutoff",
     "ωmax",
     "try_doubleN",
@@ -154,15 +172,14 @@ nstates = length(ψn_sym)
 nstates >= 1 || error("Checkpoint contains no symmetrized ground states")
 
 all_tasks = task_table(nstates, L)
-assigned_tasks = [
-    task for task in all_tasks if (task.task_id - 1) % worker_count == worker_rank
-]
-isempty(assigned_tasks) &&
-    error("Worker $worker_rank has no tasks; reduce the worker count")
+task_ids = read_task_ids(task_ids_filename)
+all(1 <= task_id <= length(all_tasks) for task_id in task_ids) ||
+    error("Task manifest contains an out-of-range task ID")
+assigned_tasks = [all_tasks[task_id] for task_id in task_ids]
 
 H = checkpoint["H"]
 E0_sym = minimum(checkpoint["En_sym"])
-cutoff = checkpoint["cutoff"]
+cutoff = get(checkpoint, "spectral_cutoff", checkpoint["cutoff"])
 ωmax = checkpoint["ωmax"]
 Emax = checkpoint["Emax"]
 try_doubleN = checkpoint["try_doubleN"]

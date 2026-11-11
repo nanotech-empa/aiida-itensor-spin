@@ -1,0 +1,29 @@
+# List of energies:
+[-574.5775840718103, -573.9350644048707, -571.7872198156522]
+
+# Energy of highest-energy state:
+401.89997937127185
+
+# List of S:
+[1.4999999854960602, 0.5000003528417465, 0.5000002461141229]
+
+# List of Sz:
+[0.5, 0.5000000000000002, 0.5000000000000011]
+
+========== Symmetrization (GS manifold) ==========
+
+# List of energies after symmetrization:
+[-574.5775840718105]
+
+# List of S after symmetrization:
+[1.4999999854960602]
+
+# List of Sz after symmetrization:
+[0.5]
+
+========== χ[nGS][i] ==========
+
+χ saved as chi_L23.jld2
+
+----------
+total time = 44 minutes, 43 seconds, 812 milliseconds

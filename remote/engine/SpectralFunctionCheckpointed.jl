@@ -74,6 +74,19 @@ function Chebyshev_moments_streaming(
             saved_at=DateTime(now()),
         )
         mv(temporary_filename, checkpoint_filename; force=true)
+
+        # Keep the large restart checkpoint and its tiny progress record separate.
+        # Segment-level accounting must not deserialize every MPS merely to read
+        # completed_n. Publish the sidecar only after the checkpoint rename.
+        status_filename = checkpoint_filename * ".status"
+        temporary_status = status_filename * ".tmp.$(getpid())"
+        open(temporary_status, "w") do io
+            println(io, "checkpoint_format_version=$CHECKPOINT_FORMAT_VERSION")
+            println(io, "moment_convention=$MOMENT_CONVENTION")
+            println(io, "N=$N")
+            println(io, "completed_n=$completed_n")
+        end
+        mv(temporary_status, status_filename; force=true)
         println(
             "checkpointed recurrence completed_n=$completed_n/$N " *
             "checkpoint=$checkpoint_filename",

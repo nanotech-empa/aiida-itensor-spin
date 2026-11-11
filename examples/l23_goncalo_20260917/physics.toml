@@ -1,0 +1,21 @@
+length = 23
+impurity_site = 12
+J_meV = 18.4
+JL_meV = 16.7
+JR_meV = 51.1
+dmrg_cutoff = 1e-8
+spectral_cutoff = 1e-6
+omega_smearing_meV = 1.5
+omega_max_meV = 100.0
+temperature_K = 4.0
+energy_precision_meV = 1e-5
+highest_energy_precision_meV = 1e-3
+initial_linkdim = 100
+excited_states = 2
+excited_state_penalty_meV = 1000.0
+symmetry_tolerance = 1e-2
+try_doubleN = true
+seed = 20260724
+
+# Goncalo did not fix a random seed or provide his Julia environment/GS.
+# We retain our reproducible seed and runtime, and compare a freshly computed GS.

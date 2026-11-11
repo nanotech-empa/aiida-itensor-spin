@@ -1,0 +1,54 @@
+# Model and physical parameters:
+model = spin1_chain_spinhalf_impurity_v1
+L = 23
+impurity site = 12
+J = 18.4 meV
+JL = 16.7 meV
+JR = 51.1 meV
+temperature = 4.0 K
+omega max = 100.0 meV
+omega smearing = 1.5 meV
+
+# Numerical parameters:
+DMRG cutoff = 1.0e-8
+Chebyshev cutoff = 1.0e-6
+excited states = 2
+
+# Random seed:
+20260724
+
+# List of energies:
+[-574.5775840675012, -573.9350647389034, -571.7872196411146]
+
+# Energy of highest-energy state:
+401.8998228575998
+
+# List of S:
+[1.499999985552544, 0.5000003518916281, 0.5000002376539452]
+
+# List of Sz:
+[0.5000000000000002, 0.5000000000000004, 0.5000000000000008]
+
+========== Symmetrization (GS manifold) ==========
+
+# List of energies after symmetrization:
+[-574.5775840675017]
+
+# List of S after symmetrization:
+[1.499999985552544]
+
+# List of Sz after symmetrization:
+[0.5000000000000002]
+
+========== GS checkpoint ==========
+
+threading mode = blocksparse
+Julia threads = 8
+checkpoint = ./gs_checkpoint.jld2
+preparation seconds = 74.99129295349121
+Julia = 1.12.6
+ITensors = 0.9.30
+ITensorMPS = 0.4.1
+
+----------
+total time = 1 minute, 18 seconds, 332 milliseconds

@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""Local-direct driver for the parameterized ground-state calculation."""
+
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+DEFAULT_CASE_ROOT = Path(__file__).resolve().parent / "engine"
+DEFAULT_JULIA = Path("/home/jovyan/opt/julia-1.12.6/bin/julia")
+
+
+def main():
+    if len(sys.argv) != 2:
+        raise RuntimeError("usage: itensor-spin-gs ground_state.json")
+    started = time.time()
+    config = json.loads(Path(sys.argv[1]).read_text())
+    if config.get("format_version") != 1:
+        raise RuntimeError("unsupported GS input format")
+    parameters = config["parameters"]
+    length = int(parameters["length"])
+    impurity_site = int(parameters["impurity_site"])
+    seed = int(parameters["seed"])
+    threading_mode = parameters["threading_mode"]
+    execution = config.get("execution", {})
+    threads = int(execution.get("threads_per_process", 1))
+    if threads < 1:
+        raise RuntimeError("execution.threads_per_process must be >= 1")
+
+    case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))
+    julia = Path(os.environ.get("ITENSOR_SPIN_JULIA", DEFAULT_JULIA))
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "JULIA_NUM_THREADS": f"{threads},0",
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "MPICH_GPU_SUPPORT_ENABLED": "0",
+            "GKSwstype": "100",
+        }
+    )
+    command = [
+        str(julia),
+        "--startup-file=no",
+        f"--project={case_root / 'ITensor_env'}",
+        str(case_root / "prepare_gs.jl"),
+        "--output",
+        ".",
+        "--seed",
+        str(seed),
+        "--L",
+        str(length),
+        "--impurity-site",
+        str(impurity_site),
+        "--threading-mode",
+        threading_mode,
+        "--model",
+        parameters["model"],
+        "--J-meV",
+        str(parameters["J_meV"]),
+        "--JL-meV",
+        str(parameters["JL_meV"]),
+        "--JR-meV",
+        str(parameters["JR_meV"]),
+        "--dmrg-cutoff",
+        str(parameters["dmrg_cutoff"]),
+        "--spectral-cutoff",
+        str(parameters["spectral_cutoff"]),
+        "--energy-precision-meV",
+        str(parameters["energy_precision_meV"]),
+        "--highest-energy-precision-meV",
+        str(parameters["highest_energy_precision_meV"]),
+        "--initial-linkdim",
+        str(parameters["initial_linkdim"]),
+        "--excited-states",
+        str(parameters["excited_states"]),
+        "--excited-state-penalty-meV",
+        str(parameters["excited_state_penalty_meV"]),
+        "--temperature-K",
+        str(parameters["temperature_K"]),
+        "--symmetry-tolerance",
+        str(parameters["symmetry_tolerance"]),
+        "--omega-max-meV",
+        str(parameters["omega_max_meV"]),
+        "--omega-smearing-meV",
+        str(parameters["omega_smearing_meV"]),
+        "--try-doubleN",
+        str(parameters["try_doubleN"]).lower(),
+    ]
+    with Path("gs-runtime-stdout.txt").open("w") as stdout, Path(
+        "gs-runtime-stderr.txt"
+    ).open("w") as stderr:
+        subprocess.run(
+            command,
+            check=True,
+            universal_newlines=True,
+            env=environment,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+    checkpoint = Path("gs_checkpoint.jld2")
+    dimensions = Path("gs_dimensions.txt").read_text().split()
+    if len(dimensions) != 3:
+        raise RuntimeError(f"invalid GS dimensions: {dimensions!r}")
+    reported_length, ground_states, total_tasks = map(int, dimensions)
+    if reported_length != length:
+        raise RuntimeError(f"GS dimensions report L={reported_length}, expected L={length}")
+    if ground_states < 1 or total_tasks != 3 * length * ground_states:
+        raise RuntimeError("GS dimensions are inconsistent with 3 * length * ground_states")
+    digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    status = {
+        "format_version": 1,
+        "state": "complete",
+        "length": length,
+        "ground_states": ground_states,
+        "total_tasks": total_tasks,
+        "impurity_site": impurity_site,
+        "seed": seed,
+        "threading_mode": threading_mode,
+        "julia_threads": threads,
+        "checkpoint_bytes": checkpoint.stat().st_size,
+        "checkpoint_sha256": digest,
+        "elapsed_seconds": time.time() - started,
+        "execution_environment": "localhost-direct",
+        "hostname": os.uname().nodename,
+    }
+    Path("gs_status.json").write_text(json.dumps(status, indent=2, sort_keys=True) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

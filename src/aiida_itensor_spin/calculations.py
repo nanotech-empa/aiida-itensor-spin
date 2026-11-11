@@ -30,8 +30,19 @@ class GroundStateCalculation(CalcJob):
 
     def prepare_for_submission(self, folder):
         parameters = normalize_ground_state_parameters(self.inputs.parameters.get_dict())
+        resources = self.inputs.metadata.options.resources
+        threads = int(resources.get("num_cores_per_mpiproc", 1))
         with folder.open("ground_state.json", "w", encoding="utf8") as handle:
-            json.dump({"format_version": 1, "parameters": parameters}, handle, indent=2)
+            json.dump(
+                {
+                    "format_version": 1,
+                    "parameters": parameters,
+                    "execution": {"threads_per_process": threads},
+                },
+                handle,
+                indent=2,
+                sort_keys=True,
+            )
             handle.write("\n")
 
         code_info = CodeInfo()
@@ -86,8 +97,15 @@ class SpectralSegmentCalculation(CalcJob):
             raise ValueError("resource_plan must have state='selected'")
         parameters = normalize_parameters(plan["parameters"])
         layout = normalize_layout(plan["selected_layout"])
-        if plan.get("pending_tasks", 0) < 1 or plan.get("workers") != (
-            layout["nodes"] * layout["processes_per_node"]
+        workers = plan.get("workers")
+        capacity = layout["nodes"] * layout["processes_per_node"]
+        if (
+            plan.get("pending_tasks", 0) < 1
+            or isinstance(workers, bool)
+            or not isinstance(workers, int)
+            or workers < layout["nodes"]
+            or workers > capacity
+            or workers > plan["pending_tasks"]
         ):
             raise ValueError("resource_plan task/worker metadata is inconsistent")
         if "parent_folder" in self.inputs and (
@@ -100,6 +118,7 @@ class SpectralSegmentCalculation(CalcJob):
             "segment_index": self.inputs.segment_index.value,
             "parameters": parameters,
             "layout": layout,
+            "workers": workers,
             "ground_state": "gs_checkpoint.jld2",
             "resume_state": "resume_state" if "parent_folder" in self.inputs else None,
             "output_state": "state",

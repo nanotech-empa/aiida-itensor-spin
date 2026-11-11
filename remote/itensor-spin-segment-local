@@ -1,0 +1,488 @@
+#!/usr/bin/env python3
+"""Local-direct driver for one immutable AiiDA spectral segment."""
+
+import heapq
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+TASK_PATTERN = re.compile(r"(?:progress_)?task_(\d{6})_.*\.jld2$")
+DEFAULT_CASE_ROOT = Path(__file__).resolve().parent / "engine"
+DEFAULT_JULIA = Path("/home/jovyan/opt/julia-1.12.6/bin/julia")
+
+
+def fail(message):
+    raise RuntimeError(message)
+
+
+def integer(mapping, key, minimum=0):
+    value = mapping.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        fail(f"{key} must be an integer >= {minimum}")
+    return value
+
+
+def link_or_copy(source, destination):
+    """Materialize an independent state entry efficiently on the same filesystem."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.link(source, destination)
+    except OSError:
+        shutil.copy2(source, destination)
+
+
+def progress_checkpoint_information(checkpoint):
+    """Return ``(completed_n, target_n)`` from a lightweight sidecar."""
+    status = Path(f"{checkpoint}.status")
+    if not status.is_file():
+        return 2, None
+    values = {}
+    for line in status.read_text().splitlines():
+        fields = line.split("=", 1)
+        if len(fields) != 2:
+            fail(f"invalid progress sidecar: {status}")
+        values[fields[0]] = fields[1]
+    completed_n = int(values.get("completed_n", "0"))
+    target_n = int(values.get("N", "0"))
+    if not 2 <= completed_n <= target_n:
+        fail(f"invalid recurrence progress in {status}")
+    return completed_n, target_n
+
+
+def inventory_previous_state(source_root, total_tasks):
+    """Inventory immutable restart files without assigning them to ranks."""
+    entries = []
+    completed = set()
+    progress = {}
+    seen_names = set()
+    seen_final_tasks = set()
+    seen_progress_tasks = set()
+    if source_root is None or not source_root.exists():
+        return entries, completed, progress
+    for source in sorted(source_root.rglob("*.jld2")):
+        match = TASK_PATTERN.match(source.name)
+        if match is None:
+            continue
+        if source.name in seen_names:
+            fail(f"duplicate restart state file: {source.name}")
+        seen_names.add(source.name)
+        task_id = int(match.group(1))
+        if not 1 <= task_id <= total_tasks:
+            fail(f"invalid restart task ID: {task_id}")
+        is_progress = source.name.startswith("progress_")
+        seen_tasks = seen_progress_tasks if is_progress else seen_final_tasks
+        if task_id in seen_tasks:
+            fail(f"duplicate restart state for task {task_id}")
+        seen_tasks.add(task_id)
+        entries.append((source, task_id, is_progress))
+        if is_progress:
+            progress[task_id] = progress_checkpoint_information(source)
+        else:
+            completed.add(task_id)
+    return entries, completed, progress
+
+
+def build_task_assignments(total_tasks, completed, progress, workers):
+    """Greedily balance only unfinished tasks across all requested workers."""
+    pending = sorted(set(range(1, total_tasks + 1)) - completed)
+    if not pending:
+        fail("cannot build a worker manifest for a complete calculation")
+    if workers > len(pending):
+        fail(f"requested {workers} workers for only {len(pending)} unfinished tasks")
+
+    targets = {target for _, target in progress.values() if target is not None}
+    if len(targets) > 1:
+        fail(f"inconsistent recurrence targets in restart state: {sorted(targets)}")
+    recurrence_target = next(iter(targets)) if targets else None
+
+    def estimated_work(task_id):
+        completed_n, target_n = progress.get(task_id, (0, recurrence_target))
+        target = target_n if target_n is not None else recurrence_target
+        return max(1, target - completed_n) if target is not None else 1
+
+    assignments = [[] for _ in range(workers)]
+    queue = [(0, 0, rank) for rank in range(workers)]
+    heapq.heapify(queue)
+    for task_id in sorted(pending, key=lambda task: (-estimated_work(task), task)):
+        load, count, rank = heapq.heappop(queue)
+        assignments[rank].append(task_id)
+        heapq.heappush(queue, (load + estimated_work(task_id), count + 1, rank))
+
+    task_to_rank = {
+        task_id: rank for rank, task_ids in enumerate(assignments) for task_id in task_ids
+    }
+    if set(task_to_rank) != set(pending) or any(not task_ids for task_ids in assignments):
+        fail("internal error while constructing the unfinished-task manifest")
+    loads = [sum(estimated_work(task_id) for task_id in task_ids) for task_ids in assignments]
+    summary = {
+        "policy": "unfinished-greedy-recurrence-balance-v1",
+        "pending_tasks": len(pending),
+        "active_workers": len(assignments),
+        "idle_workers": 0,
+        "minimum_tasks_per_worker": min(map(len, assignments)),
+        "maximum_tasks_per_worker": max(map(len, assignments)),
+        "minimum_estimated_recurrence_units": min(loads),
+        "maximum_estimated_recurrence_units": max(loads),
+        "worker_task_ids": assignments,
+    }
+    return assignments, task_to_rank, summary
+
+
+def write_task_manifests(manifest_root, assignments):
+    manifest_root.mkdir(parents=True, exist_ok=False)
+    for rank, task_ids in enumerate(assignments):
+        manifest = manifest_root / f"worker_{rank}.txt"
+        manifest.write_text("".join(f"{task_id}\n" for task_id in task_ids))
+
+
+def import_previous_state(entries, worker_root, workers, task_to_rank):
+    counts = {"final": 0, "progress": 0}
+    for source, task_id, is_progress in entries:
+        rank = task_to_rank.get(task_id, (task_id - 1) % workers)
+        destination = worker_root / f"worker_{rank}" / source.name
+        link_or_copy(source, destination)
+        source_status = Path(f"{source}.status")
+        if source_status.is_file():
+            link_or_copy(source_status, Path(f"{destination}.status"))
+        counts["progress" if is_progress else "final"] += 1
+    return counts
+
+
+def atomic_json(path, payload):
+    temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    os.replace(temporary, path)
+
+
+def run(command, env=None, capture=False):
+    options = {"check": True, "universal_newlines": True, "env": env}
+    if capture:
+        options.update({"stdout": subprocess.PIPE, "stderr": subprocess.PIPE})
+    return subprocess.run(command, **options)
+
+
+def run_local_workers(
+    workers, threads, case_root, checkpoint, worker_root, backend, threading_mode, environment
+):
+    """Launch independent Julia workers concurrently under the direct scheduler."""
+    processes = []
+    streams = []
+    try:
+        for rank in range(workers):
+            worker_environment = environment.copy()
+            worker_environment.update(
+                {
+                    "SLURM_PROCID": str(rank),
+                    "SLURM_NTASKS": str(workers),
+                    "SLURM_CPUS_PER_TASK": str(threads),
+                }
+            )
+            stdout = (worker_root / f"worker_{rank}" / "stdout.txt").open("w")
+            stderr = (worker_root / f"worker_{rank}" / "stderr.txt").open("w")
+            streams.extend((stdout, stderr))
+            command = [
+                str(case_root.parent / "run_segment_rank.sh"),
+                str(checkpoint),
+                str(worker_root),
+                str(case_root),
+                backend,
+                threading_mode,
+            ]
+            processes.append(
+                subprocess.Popen(
+                    command,
+                    env=worker_environment,
+                    stdout=stdout,
+                    stderr=stderr,
+                    universal_newlines=True,
+                )
+            )
+
+        while any(process.poll() is None for process in processes):
+            failures = [
+                (rank, process.returncode)
+                for rank, process in enumerate(processes)
+                if process.returncode not in (None, 0)
+            ]
+            if failures:
+                for process in processes:
+                    if process.poll() is None:
+                        process.terminate()
+                for process in processes:
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                fail(f"local Julia worker failure(s): {failures}")
+            time.sleep(0.2)
+
+        failures = [
+            (rank, process.returncode)
+            for rank, process in enumerate(processes)
+            if process.returncode != 0
+        ]
+        if failures:
+            fail(f"local Julia worker failure(s): {failures}")
+    finally:
+        for stream in streams:
+            stream.close()
+
+
+def checkpoint_information(julia, case_root, checkpoint):
+    result = run(
+        [
+            str(julia),
+            "--startup-file=no",
+            f"--project={case_root / 'ITensor_env'}",
+            str(case_root / "checkpoint_info.jl"),
+            str(checkpoint),
+        ],
+        capture=True,
+    )
+    values = tuple(int(value) for value in result.stdout.split())
+    if len(values) != 3:
+        fail(f"invalid checkpoint information: {result.stdout!r}")
+    return values
+
+
+def progress_information(julia, case_root, checkpoint, worker_root):
+    result = run(
+        [
+            str(julia),
+            "--startup-file=no",
+            f"--project={case_root / 'ITensor_env'}",
+            str(case_root.parent / "segment_progress.jl"),
+            str(checkpoint),
+            str(worker_root),
+        ],
+        capture=True,
+    )
+    values = tuple(int(value) for value in result.stdout.split())
+    if len(values) != 5:
+        fail(f"invalid segment progress information: {result.stdout!r}")
+    return values
+
+
+def status_payload(parameters, length, states, progress, segment_index):
+    total_tasks, completed_tasks, progress_units, progress_units_total, recurrence_target = progress
+    return {
+        "format_version": 1,
+        "segment_index": segment_index,
+        "state": "complete" if completed_tasks == total_tasks else "checkpointed",
+        "length": length,
+        "ground_states": states,
+        "total_tasks": total_tasks,
+        "completed_tasks": completed_tasks,
+        "progress_units_completed": progress_units,
+        "progress_units_total": progress_units_total,
+        "recurrence_target_per_task": recurrence_target,
+        "chebyshev_convention": parameters["chebyshev_convention"],
+        "backend": parameters["backend"],
+        "threading_mode": parameters["threading_mode"],
+    }
+
+
+def summary_payload(segment_index, layout, imported, assignment, started, phase):
+    return {
+        "format_version": 1,
+        "segment_index": segment_index,
+        "layout": layout,
+        "imported_final_tasks": imported["final"],
+        "imported_progress_checkpoints": imported["progress"],
+        "assignment": assignment,
+        "elapsed_seconds": time.time() - started,
+        "execution_environment": "localhost-direct",
+        "hostname": os.uname().nodename,
+        "phase": phase,
+    }
+
+
+def main():
+    if len(sys.argv) != 2:
+        fail("usage: itensor-spin-segment segment.json")
+    started = time.time()
+    config = json.loads(Path(sys.argv[1]).read_text())
+    if config.get("format_version") != 1:
+        fail("unsupported segment input format")
+    layout = config["layout"]
+    parameters = config["parameters"]
+    nodes = integer(layout, "nodes", 1)
+    processes_per_node = integer(layout, "processes_per_node", 1)
+    threads = integer(layout, "threads_per_process", 1)
+    internal_stop_seconds = integer(layout, "internal_stop_seconds", 1)
+    workers = integer(config, "workers", 1)
+    allocation_capacity = nodes * processes_per_node
+    segment_index = integer(config, "segment_index", 0)
+    if nodes != 1:
+        fail("the localhost direct launcher supports exactly one node")
+    try:
+        available_cpus = len(os.sched_getaffinity(0))
+    except AttributeError:
+        available_cpus = os.cpu_count() or 1
+    if processes_per_node * threads > available_cpus:
+        fail(
+            f"requested {processes_per_node * threads} CPU threads but only "
+            f"{available_cpus} are available to the container"
+        )
+    if workers < nodes or workers > allocation_capacity:
+        fail(
+            f"requested {workers} workers cannot occupy {nodes} nodes with "
+            f"capacity {processes_per_node} per node"
+        )
+
+    case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))
+    julia = Path(os.environ.get("ITENSOR_SPIN_JULIA", DEFAULT_JULIA))
+    checkpoint = Path(config["ground_state"]).resolve()
+    checkpoint.is_file() or fail(f"ground-state checkpoint is unreadable: {checkpoint}")
+    length, states, total_tasks = checkpoint_information(julia, case_root, checkpoint)
+    if "expected_total_tasks" in parameters:
+        expected_tasks = integer(parameters, "expected_total_tasks", 1)
+        if total_tasks != expected_tasks:
+            fail(f"checkpoint defines {total_tasks} tasks, input expects {expected_tasks}")
+    if workers > total_tasks:
+        fail(f"requested {workers} workers for only {total_tasks} tasks")
+
+    worker_root = Path(config["output_state"]) / "workers"
+    merged_root = Path(config["output_state"]) / "merged"
+    compact_root = Path("compact_result")
+    manifest_root = Path("task_manifest")
+    source_root = Path(config["resume_state"]) if config.get("resume_state") else None
+    entries, completed, progress = inventory_previous_state(source_root, total_tasks)
+    assignments, task_to_rank, assignment_summary = build_task_assignments(
+        total_tasks, completed, progress, workers
+    )
+    write_task_manifests(manifest_root, assignments)
+    for rank in range(workers):
+        (worker_root / f"worker_{rank}").mkdir(parents=True, exist_ok=True)
+    merged_root.mkdir(parents=True, exist_ok=True)
+    compact_root.mkdir(parents=True, exist_ok=True)
+
+    imported = import_previous_state(entries, worker_root, workers, task_to_rank)
+
+    # Publish a valid restart status before the expensive srun. If Slurm or a
+    # node terminates the segment unexpectedly, AiiDA can continue from this
+    # immutable remote folder rather than treating the work as lost.
+    initial_progress = progress_information(julia, case_root, checkpoint, worker_root)
+    if initial_progress[0] != total_tasks:
+        fail("progress helper and checkpoint disagree on total task count")
+    if initial_progress[1] < total_tasks:
+        atomic_json(
+            Path(config["status_file"]),
+            status_payload(parameters, length, states, initial_progress, segment_index),
+        )
+        atomic_json(
+            Path(config["summary_file"]),
+            summary_payload(
+                segment_index, layout, imported, assignment_summary, started, "initialized"
+            ),
+        )
+
+    deadline_epoch = int(started + internal_stop_seconds)
+    backend = parameters["backend"]
+    threading_mode = parameters["threading_mode"]
+    checkpoint_every = integer(parameters, "checkpoint_every", 1)
+    heartbeat_every = integer(parameters, "heartbeat_every", 1)
+    stop_after_n = int(layout.get("stop_after_n", 0))
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "MPICH_GPU_SUPPORT_ENABLED": "0",
+            "ITENSOR_SPIN_DEADLINE_EPOCH": str(deadline_epoch),
+            "ITENSOR_SPIN_STOP_AFTER_N": str(stop_after_n),
+            "ITENSOR_SPIN_CHECKPOINT_EVERY": str(checkpoint_every),
+            "ITENSOR_SPIN_HEARTBEAT_EVERY": str(heartbeat_every),
+            "ITENSOR_SPIN_MANIFEST_ROOT": str(manifest_root.resolve()),
+        }
+    )
+    if initial_progress[1] < total_tasks:
+        run_local_workers(
+            workers,
+            threads,
+            case_root,
+            checkpoint,
+            worker_root,
+            backend,
+            threading_mode,
+            environment,
+        )
+
+    (
+        reported_total,
+        completed_tasks,
+        progress_units,
+        progress_units_total,
+        recurrence_target,
+    ) = progress_information(julia, case_root, checkpoint, worker_root)
+    if reported_total != total_tasks:
+        fail("progress helper and checkpoint disagree on total task count")
+    complete = completed_tasks == total_tasks
+
+    if complete:
+        collector_environment = environment.copy()
+        collector_environment["JULIA_NUM_THREADS"] = "1,0"
+        run(
+            [
+                str(julia),
+                "--startup-file=no",
+                f"--project={case_root / 'ITensor_env'}",
+                str(case_root / "collect_tasks.jl"),
+                "--input-root",
+                str(worker_root),
+                "--output",
+                str(merged_root),
+                "--checkpoint",
+                str(checkpoint),
+                "--backend",
+                backend,
+                "--threading-mode",
+                threading_mode,
+                "--reference-tolerance",
+                "1e-10",
+            ],
+            env=collector_environment,
+        )
+        for filename in ("spectrum.tsv", "collection_report.txt", "task_timings.tsv"):
+            source = merged_root / filename
+            source.is_file() or fail(f"collector did not create {filename}")
+            shutil.copy2(source, compact_root / filename)
+
+    atomic_json(
+        Path(config["status_file"]),
+        status_payload(
+            parameters,
+            length,
+            states,
+            (
+                reported_total,
+                completed_tasks,
+                progress_units,
+                progress_units_total,
+                recurrence_target,
+            ),
+            segment_index,
+        ),
+    )
+    atomic_json(
+        Path(config["summary_file"]),
+        summary_payload(
+            segment_index, layout, imported, assignment_summary, started, "finalized"
+        ),
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as exception:
+        print(f"itensor-spin-segment: {exception}", file=sys.stderr)
+        raise

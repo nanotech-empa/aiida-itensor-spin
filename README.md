@@ -6,14 +6,37 @@ Adaptation of the spin-chain ITensor code developed by
 Experimental, restart-safe AiiDA orchestration for the Julia/ITensor spin-chain
 spectral calculation on Daint/ALPS.
 
+## New: L=23 comparison with Gonçalo's updated reference
+
+The [17 September L23 experiment](results/L23/README.md) completed all 69
+spectral tasks on Daint: initially **one node, 23 concurrent processes, two
+threads/process**, followed by a four-process checkpoint continuation.
+Total Slurm allocation time, including GS, was **33 min 18 s**.
+
+The relative spectral L2 difference from Gonçalo's supplied result is
+**0.1004%**, with matching per-site peak positions on the sampled grid.
+**The runs did not share a controlled random seed or GS checkpoint**: our
+seed was 20260724; Gonçalo's was unspecified. This is close agreement, not an
+exact-reproduction claim, and the residual difference is not yet explained.
+
+A complete localhost AiiDA run has now also been performed in a Linux
+ARM64 container on Apple Silicon: one GS followed by all 69 spectral tasks with
+four processes and two threads/process. It finished in **41 min 48 s** and
+reproduced the reference with a relative spectral L2 difference of **0.10057%**
+and matching sampled peak positions at all 23 sites. This is an independent
+reproduction on the same architecture class, not a same-machine controlled
+speedup benchmark. The linked report contains both Daint and localhost data.
+
+## Workflow overview
+
 The public entry point is one complete `SpinChainWorkChain`: it validates
 inputs, computes and parses the ground state, calls a provenance-recorded
 resource-planning CalcFunction, runs bounded spectral segments, collects the
 spectrum, and returns compact result files. Each segment reads an immutable
 ground-state checkpoint and, when necessary, the immutable state of the
 preceding segment. A valid `checkpointed` result triggers the next submission
-automatically; a hard execution error stops safely instead of blindly consuming
-more nodes.
+automatically. The workflow can also make a bounded continuation from preserved
+remote state when an execution ends unexpectedly.
 
 ## Scientific correction and validation
 
@@ -72,25 +95,35 @@ physically as intended. The directly readable spectrum is
 complete compact JLD2 output and independent reference result are documented in
 [`results/L11/README.md`](results/L11/README.md).
 
+## Localhost ARM64 execution
+
+The same restart-safe WorkChain can run inside a Linux ARM64 AiiDAlab
+container through AiiDA's `localhost` computer. Dedicated local launchers
+replace Slurm `srun` with bounded direct Julia worker processes; the CalcJobs,
+parsers, checkpoint contract, resource planning and result collection are
+shared. See [the localhost installation and submission guide](docs/localhost.md).
+
 ## Current installation and L=11 example
 
-The validated Daint engine is isolated at:
+The validated Daint engines are isolated at:
 
 ```text
 /capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v4
+/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v5
+/capstor/scratch/cscs/cpi/goncalo/parallel/aiida_spin_engine_v6
 ```
 
-The validated AiiDA codes are:
+The GS remains on v4; newly submitted restartable spectral calculations use v6:
 
 ```text
 itensor-spin-gs-0.3.0-v4@daint.alps_lp83
-itensor-spin-segment-0.3.0-v4@daint.alps_lp83
+itensor-spin-segment-0.3.0-v6@daint.alps_lp83
 ```
 
 From this repository, submit the complete fresh validation with:
 
 ```console
-verdi run examples/submit_l11.py
+verdi run examples/submit_l11_recovery_v6.py
 ```
 
 The example provides only resource ceilings. After parsing the L=11 GS, the
@@ -128,6 +161,37 @@ CalcFunction `9856`, reduced the allocation from 2 nodes x 6 processes/node to
 1 node x 4 processes, and submitted segment CalcJob `9859`, which completed the
 remaining four tasks. The final spectrum `SinglefileData<9864>` is numerically
 identical to the retained corrected L=11 reference.
+
+### Scalable checkpoint accounting
+
+The v5 segment engine publishes a valid status before starting its expensive
+worker step and records each recurrence iteration in a tiny atomic sidecar.
+Segment accounting therefore never deserializes the large MPS checkpoints.
+Legacy v4 checkpoints without sidecars are accepted with a conservative
+progress lower bound and are fully validated by a worker when resumed.
+
+This change was motivated by an L=101 segment whose 560 physics workers stopped
+cleanly but whose old accounting pass tried to load 379 GiB of checkpoints and
+hit the outer Slurm walltime before writing its status. The v5 scanner processed
+the same preserved state in 43.6 seconds on one debug node. A fresh two-segment
+L=11 v5 acceptance WorkChain
+`b5a66148-7a0f-488b-b5ac-4583dc4fcacb` completed 30/33 tasks, automatically
+repacked the remaining three tasks, and returned a spectrum byte-for-byte
+identical to the retained corrected reference.
+
+### Explicit unfinished-task assignment (v6)
+
+The v6 segment engine removes the modulo-based tail collision: each segment
+inventories the immutable parent state, assigns every unfinished task exactly
+once, balances workers using the remaining Chebyshev recurrence units, and
+records every worker manifest in `segment_summary`. Completed tasks and
+checkpoints remain untouched.
+
+On 2026-09-13, `SpinChainWorkChain<11703>` (`Finished [0]`) exercised a real
+automatic continuation: segment 1 completed 18/33 tasks, and segment 2 assigned
+the 15 remaining tasks across 12 active workers with no collisions or idle
+workers and completed 33/33. Its 2,750-row spectrum is exactly identical to
+the retained corrected L=11 reference (maximum absolute chi difference `0.0`).
 
 The user-facing resource ceilings are stored in the `spectral_resources`
 Dict: `max_nodes`, `max_processes_per_node`, and

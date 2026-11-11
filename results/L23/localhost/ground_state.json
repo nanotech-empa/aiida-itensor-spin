@@ -1,0 +1,28 @@
+{
+  "execution": {
+    "threads_per_process": 8
+  },
+  "format_version": 1,
+  "parameters": {
+    "JL_meV": 16.7,
+    "JR_meV": 51.1,
+    "J_meV": 18.4,
+    "dmrg_cutoff": 1e-08,
+    "energy_precision_meV": 1e-05,
+    "excited_state_penalty_meV": 1000.0,
+    "excited_states": 2,
+    "highest_energy_precision_meV": 0.001,
+    "impurity_site": 12,
+    "initial_linkdim": 100,
+    "length": 23,
+    "model": "spin1_chain_spinhalf_impurity_v1",
+    "omega_max_meV": 100.0,
+    "omega_smearing_meV": 1.5,
+    "seed": 20260724,
+    "spectral_cutoff": 1e-06,
+    "symmetry_tolerance": 0.01,
+    "temperature_K": 4.0,
+    "threading_mode": "blocksparse",
+    "try_doubleN": true
+  }
+}

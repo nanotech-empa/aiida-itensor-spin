@@ -135,6 +135,22 @@ def test_largest_feasible_layout_respects_ceilings():
     assert (l101["nodes"], l101["processes_per_node"], l101["workers"]) == (10, 12, 120)
 
 
+def test_layout_packs_partial_final_node_instead_of_factoring_worker_count():
+    limits = {
+        "max_nodes": 70,
+        "max_processes_per_node": 8,
+        "max_threads_per_process": 4,
+        "wallclock_seconds": 43200,
+        "internal_stop_seconds": 41400,
+        "partition": "normal",
+    }
+    layout = select_largest_feasible_layout(62, limits)
+    assert (layout["nodes"], layout["processes_per_node"], layout["workers"]) == (8, 8, 62)
+
+    layout = select_largest_feasible_layout(123, limits)
+    assert (layout["nodes"], layout["processes_per_node"], layout["workers"]) == (16, 8, 123)
+
+
 def test_progress_can_continue_with_a_different_layout():
     previous = validate_segment_status(status(tasks=4, units=400), PARAMETERS)
     current = validate_segment_status(status(tasks=8, units=900), PARAMETERS, previous)
@@ -155,12 +171,17 @@ def test_complete_requires_all_manifest_tasks():
 
 
 def test_ground_state_parameters_are_explicit_and_valid():
-    assert (
-        normalize_ground_state_parameters(
-            {"length": 11, "impurity_site": 6, "seed": 20260724, "threading_mode": "blocksparse"}
-        )["length"]
-        == 11
+    normalized = normalize_ground_state_parameters(
+        {"length": 23, "impurity_site": 12, "seed": 20260724, "threading_mode": "blocksparse"}
     )
+    assert normalized["length"] == 23
+    assert normalized["model"] == "spin1_chain_spinhalf_impurity_v1"
+    assert normalized["J_meV"] == 18.4
+    assert normalized["JL_meV"] == 16.7
+    assert normalized["JR_meV"] == 51.1
+    assert normalized["dmrg_cutoff"] == 1e-8
+    assert normalized["spectral_cutoff"] == 1e-6
+    assert normalized["omega_smearing_meV"] == 1.5
     with pytest.raises(ContractError, match="cannot exceed"):
         normalize_ground_state_parameters({"length": 11, "impurity_site": 12, "seed": 20260724})
 
@@ -170,3 +191,13 @@ def test_convention_mismatch_is_rejected():
     value["chebyshev_convention"] = "revised-final-moment"
     with pytest.raises(ContractError, match="convention"):
         validate_segment_status(value, PARAMETERS)
+
+
+def test_ground_state_model_and_numerics_are_validated():
+    base = {"length": 11, "impurity_site": 6, "seed": 1}
+    with pytest.raises(ContractError, match="registered model"):
+        normalize_ground_state_parameters({**base, "model": "unknown"})
+    with pytest.raises(ContractError, match="spectral_cutoff"):
+        normalize_ground_state_parameters({**base, "spectral_cutoff": 0})
+    with pytest.raises(ContractError, match="temperature_K"):
+        normalize_ground_state_parameters({**base, "temperature_K": -1})

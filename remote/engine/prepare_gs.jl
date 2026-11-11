@@ -24,6 +24,12 @@ function parse_options(args)
     return options
 end
 
+function parse_bool(value, name)
+    normalized = lowercase(value)
+    normalized in ("true", "false") || error("$name must be true or false")
+    return normalized == "true"
+end
+
 options = parse_options(ARGS)
 output_dir = get(options, "--output", "")
 isempty(output_dir) && error("Required option: --output DIR")
@@ -37,22 +43,23 @@ i_imp = parse(Int, get(options, "--impurity-site", string(cld(L, 2))))
 1 <= i_imp <= L || error("Require 1 <= impurity-site <= L")
 mkpath(output_dir)
 
-# Physical parameters: same model as Goncalo's working case.
-J = 18.4
-Jp = 16.7
-
-# Numerical parameters: unchanged from Goncalo's working case.
-linkdim = 100
-cutoff = 1e-8
-precE = 1e-5
-precEmax = 1e-3
-nexc = 2
-w = 1000
-T = 4
-tol_sym = 1e-2
-ωmax = 100.0
-try_doubleN = true
-ω_smearing = 2.0
+model = get(options, "--model", "")
+model == "spin1_chain_spinhalf_impurity_v1" || error("Unsupported model: $model")
+J = parse(Float64, options["--J-meV"])
+JL = parse(Float64, options["--JL-meV"])
+JR = parse(Float64, options["--JR-meV"])
+cutoff = parse(Float64, options["--dmrg-cutoff"])
+spectral_cutoff = parse(Float64, options["--spectral-cutoff"])
+precE = parse(Float64, options["--energy-precision-meV"])
+precEmax = parse(Float64, options["--highest-energy-precision-meV"])
+linkdim = parse(Int, options["--initial-linkdim"])
+nexc = parse(Int, options["--excited-states"])
+w = parse(Float64, options["--excited-state-penalty-meV"])
+T = parse(Float64, options["--temperature-K"])
+tol_sym = parse(Float64, options["--symmetry-tolerance"])
+ωmax = parse(Float64, options["--omega-max-meV"])
+ω_smearing = parse(Float64, options["--omega-smearing-meV"])
+try_doubleN = parse_bool(options["--try-doubleN"], "--try-doubleN")
 
 start_time = DateTime(now())
 start_wall = time()
@@ -65,12 +72,21 @@ Random.seed!(seed)
 
 summary_filename = joinpath(output_dir, "gs_summary.txt")
 fw = open(summary_filename, "w")
+write(fw, "# Model and physical parameters:\n")
+write(fw, "model = $model\n")
+write(fw, "L = $L\nimpurity site = $i_imp\n")
+write(fw, "J = $J meV\nJL = $JL meV\nJR = $JR meV\n")
+write(fw, "temperature = $T K\nomega max = $ωmax meV\n")
+write(fw, "omega smearing = $ω_smearing meV\n\n")
+write(fw, "# Numerical parameters:\n")
+write(fw, "DMRG cutoff = $cutoff\nChebyshev cutoff = $spectral_cutoff\n")
+write(fw, "excited states = $nexc\n\n")
 write(fw, "# Random seed:\n$seed\n\n")
 
 # Sites and common operators.
 sites = siteinds("S=1", L; conserve_sz=true)
 sites[i_imp] = siteind("S=1/2"; conserve_sz=true)
-H = Hamiltonians.H_Heis_impurity_1D_OBC(J, Jp, Jp, i_imp, sites)
+H = Hamiltonians.H_Heis_impurity_1D_OBC(J, JL, JR, i_imp, sites)
 S2 = Operators.S2_op(sites)
 Sz = Operators.Sz_op(sites)
 
@@ -138,12 +154,15 @@ itensormps_version = string(pkgversion(ITensorMPS))
 checkpoint_filename = joinpath(output_dir, "gs_checkpoint.jld2")
 jldsave(
     checkpoint_filename;
+    model,
     L,
     i_imp,
     J,
-    Jp,
+    JL,
+    JR,
     linkdim,
     cutoff,
+    spectral_cutoff,
     precE,
     precEmax,
     nexc,

@@ -1,0 +1,11 @@
+format version = 3
+backend = streaming
+threading mode = blocksparse
+moment convention = chebyshev-2n-minus-1-v2
+L = 23
+states = 1
+channels = ["zz", "pm", "mp"]
+expected tasks = 69
+collected tasks = 69
+checkpoint = /home/jovyan/aiida_run/2d/0f/839e-9544-47c2-acfb-a758149b03e1/gs_checkpoint.jld2
+checkpoint sha256 = 0599b69750513911930ebf47372e458962eec394a91c7e1b5e9c4199c875b936

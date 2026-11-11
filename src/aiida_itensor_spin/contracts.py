@@ -12,6 +12,26 @@ RECOMMENDED_THREADS_PER_PROCESS = 2
 ALLOWED_BACKENDS = {"streaming"}
 ALLOWED_THREADING_MODES = {"outer", "blocksparse"}
 MOMENT_CONVENTION = "chebyshev-2n-minus-1-v2"
+MODEL_IDENTIFIER = "spin1_chain_spinhalf_impurity_v1"
+
+GROUND_STATE_DEFAULTS = {
+    "model": MODEL_IDENTIFIER,
+    "J_meV": 18.4,
+    "JL_meV": 16.7,
+    "JR_meV": 51.1,
+    "dmrg_cutoff": 1e-8,
+    "spectral_cutoff": 1e-6,
+    "energy_precision_meV": 1e-5,
+    "highest_energy_precision_meV": 1e-3,
+    "initial_linkdim": 100,
+    "excited_states": 2,
+    "excited_state_penalty_meV": 1000.0,
+    "temperature_K": 4.0,
+    "symmetry_tolerance": 1e-2,
+    "omega_max_meV": 100.0,
+    "omega_smearing_meV": 1.5,
+    "try_doubleN": True,
+}
 
 
 class ContractError(ValueError):
@@ -23,6 +43,20 @@ def _integer(mapping: Mapping[str, Any], key: str, *, minimum: int = 0) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
         raise ContractError(f"{key} must be an integer >= {minimum}")
     return value
+
+
+def _positive_float(mapping: Mapping[str, Any], key: str) -> float:
+    value = mapping.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        raise ContractError(f"{key} must be a number > 0")
+    return float(value)
+
+
+def _real_float(mapping: Mapping[str, Any], key: str) -> float:
+    value = mapping.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ContractError(f"{key} must be a real number")
+    return float(value)
 
 
 def safe_relative_path(value: str, *, label: str) -> str:
@@ -98,32 +132,27 @@ def normalize_resource_limits(value: Mapping[str, Any]) -> dict[str, Any]:
 def select_largest_feasible_layout(
     total_tasks: int, resource_limits: Mapping[str, Any]
 ) -> dict[str, Any]:
-    """Select the largest uniform worker layout within user ceilings."""
+    """Select the largest densely packed worker layout within user ceilings.
+
+    ``processes_per_node`` is the allocation capacity, not a requirement that
+    every node contain exactly that many active workers.  The final node may
+    therefore be partially occupied.
+    """
     tasks = _integer({"total_tasks": total_tasks}, "total_tasks", minimum=1)
     limits = normalize_resource_limits(resource_limits)
-    worker_ceiling = min(
+    workers = min(
         limits["max_nodes"] * limits["max_processes_per_node"],
         tasks,
     )
-    best: tuple[int, int, int] | None = None
-    for nodes in range(1, min(limits["max_nodes"], worker_ceiling) + 1):
-        processes_per_node = min(limits["max_processes_per_node"], worker_ceiling // nodes)
-        if processes_per_node < 1:
-            continue
-        workers = nodes * processes_per_node
-        candidate = (workers, -nodes, processes_per_node)
-        if best is None or candidate > best:
-            best = candidate
-    if best is None:
-        raise ContractError("resource limits cannot place even one spectral worker")
-    workers, negative_nodes, processes_per_node = best
+    processes_per_node = min(limits["max_processes_per_node"], workers)
+    nodes = (workers + processes_per_node - 1) // processes_per_node
     threads_per_process = min(
         RECOMMENDED_THREADS_PER_PROCESS,
         limits["max_threads_per_process"],
         MAX_CORES_PER_DAINT_NODE // processes_per_node,
     )
     return {
-        "nodes": -negative_nodes,
+        "nodes": nodes,
         "processes_per_node": processes_per_node,
         "threads_per_process": threads_per_process,
         "wallclock_seconds": limits["wallclock_seconds"],
@@ -199,20 +228,52 @@ def add_discovered_task_count(
 
 
 def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate inputs of the trusted parameterized ground-state calculation."""
+    """Validate the versioned spin-1 impurity model and numerical controls."""
+    supplied = {**GROUND_STATE_DEFAULTS, **value}
+    model = str(supplied.get("model", "")).strip()
+    if model != MODEL_IDENTIFIER:
+        raise ContractError(
+            f"model must be {MODEL_IDENTIFIER!r}; other Hamiltonians need a registered model"
+        )
     length = _integer(value, "length", minimum=3)
     impurity_site = _integer(value, "impurity_site", minimum=1)
     if impurity_site > length:
         raise ContractError("impurity_site cannot exceed length")
     seed = _integer(value, "seed", minimum=0)
-    threading_mode = str(value.get("threading_mode", "blocksparse")).lower()
+    threading_mode = str(supplied.get("threading_mode", "blocksparse")).lower()
     if threading_mode not in ALLOWED_THREADING_MODES:
         raise ContractError(f"threading_mode must be one of {sorted(ALLOWED_THREADING_MODES)}")
+    temperature = _real_float(supplied, "temperature_K")
+    if temperature < 0:
+        raise ContractError("temperature_K must be >= 0")
+    try_double = supplied.get("try_doubleN")
+    if not isinstance(try_double, bool):
+        raise ContractError("try_doubleN must be a boolean")
     return {
+        "model": model,
         "length": length,
         "impurity_site": impurity_site,
         "seed": seed,
         "threading_mode": threading_mode,
+        "J_meV": _real_float(supplied, "J_meV"),
+        "JL_meV": _real_float(supplied, "JL_meV"),
+        "JR_meV": _real_float(supplied, "JR_meV"),
+        "dmrg_cutoff": _positive_float(supplied, "dmrg_cutoff"),
+        "spectral_cutoff": _positive_float(supplied, "spectral_cutoff"),
+        "energy_precision_meV": _positive_float(supplied, "energy_precision_meV"),
+        "highest_energy_precision_meV": _positive_float(
+            supplied, "highest_energy_precision_meV"
+        ),
+        "initial_linkdim": _integer(supplied, "initial_linkdim", minimum=1),
+        "excited_states": _integer(supplied, "excited_states", minimum=0),
+        "excited_state_penalty_meV": _positive_float(
+            supplied, "excited_state_penalty_meV"
+        ),
+        "temperature_K": temperature,
+        "symmetry_tolerance": _positive_float(supplied, "symmetry_tolerance"),
+        "omega_max_meV": _positive_float(supplied, "omega_max_meV"),
+        "omega_smearing_meV": _positive_float(supplied, "omega_smearing_meV"),
+        "try_doubleN": try_double,
     }
 
 

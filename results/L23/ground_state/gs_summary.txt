@@ -1,0 +1,38 @@
+# Random seed:
+20260724
+
+# List of energies:
+[-574.5775840675029, -573.9350647389011, -571.7872196411131]
+
+# Energy of highest-energy state:
+401.899819323595
+
+# List of S:
+[1.499999985552547, 0.5000003518916236, 0.500000237653943]
+
+# List of Sz:
+[0.500000000000002, 0.4999999999999992, 0.49999999999999933]
+
+========== Symmetrization (GS manifold) ==========
+
+# List of energies after symmetrization:
+[-574.5775840675033]
+
+# List of S after symmetrization:
+[1.499999985552547]
+
+# List of Sz after symmetrization:
+[0.500000000000002]
+
+========== GS checkpoint ==========
+
+threading mode = blocksparse
+Julia threads = 8
+checkpoint = ./gs_checkpoint.jld2
+preparation seconds = 95.95307803153992
+Julia = 1.12.6
+ITensors = 0.9.30
+ITensorMPS = 0.4.1
+
+----------
+total time = 1 minute, 40 seconds, 438 milliseconds

@@ -59,8 +59,10 @@ def derive_resource_plan(
         dict={
             "state": "selected",
             "reason": (
-                "largest uniform worker layout within the supplied ceilings "
-                "while minimizing nodes when worker counts tie; threads per process are capped at 2 based on the validated CPU scaling benchmark"
+                "maximum useful worker count within the supplied ceilings, packed at "
+                "the allowed processes-per-node capacity with a partially occupied "
+                "final node when needed; threads per process are capped at 2 based "
+                "on the validated CPU scaling benchmark"
             ),
             "length": metadata["length"],
             "ground_states": metadata["ground_states"],
@@ -99,6 +101,7 @@ class SpinSpectraWorkChain(WorkChain):
         spec.input("max_segments", valid_type=orm.Int, default=lambda: orm.Int(6))
         spec.input("max_node_hours", valid_type=orm.Float, default=lambda: orm.Float(100.0))
         spec.input("max_stalled_segments", valid_type=orm.Int, default=lambda: orm.Int(1))
+        spec.input("max_failed_segments", valid_type=orm.Int, default=lambda: orm.Int(1))
         spec.outline(
             cls.setup,
             while_(cls.should_run)(cls.submit_segment, cls.inspect_segment),
@@ -117,6 +120,11 @@ class SpinSpectraWorkChain(WorkChain):
         spec.exit_code(403, "ERROR_STALLED", message="No progress in consecutive segments.")
         spec.exit_code(404, "ERROR_MAX_SEGMENTS", message="Maximum segment count reached.")
         spec.exit_code(405, "ERROR_NODE_HOURS", message="Node-hour safety limit reached.")
+        spec.exit_code(
+            406,
+            "ERROR_FAILED_SEGMENTS",
+            message="Consecutive failed-segment recovery limit reached.",
+        )
 
     def setup(self):
         try:
@@ -134,6 +142,8 @@ class SpinSpectraWorkChain(WorkChain):
                 raise ContractError("max_node_hours must be > 0")
             if self.inputs.max_stalled_segments.value < 1:
                 raise ContractError("max_stalled_segments must be >= 1")
+            if self.inputs.max_failed_segments.value < 0:
+                raise ContractError("max_failed_segments must be >= 0")
         except (KeyError, ContractError, TypeError, ValueError) as exception:
             self.report(f"invalid spectral workflow input: {exception}")
             return self.exit_codes.ERROR_INVALID_INPUT
@@ -141,6 +151,7 @@ class SpinSpectraWorkChain(WorkChain):
         self.ctx.segment_count = 0
         self.ctx.node_hours = 0.0
         self.ctx.stalled_segments = 0
+        self.ctx.failed_segments = 0
         self.ctx.previous_status = None
         self.ctx.previous_status_node = None
         self.ctx.previous_summary_node = None
@@ -226,12 +237,26 @@ class SpinSpectraWorkChain(WorkChain):
 
     def inspect_segment(self):
         child = self.ctx.segment
-        if not child.is_finished_ok or "segment_status" not in child.outputs:
+        if "segment_status" not in child.outputs:
             if "remote_folder" in child.outputs:
                 self.ctx.previous_folder = child.outputs.remote_folder
-            self.report(f"spectral CalcJob<{child.pk}> failed with exit status {child.exit_status}")
+            if (
+                "remote_folder" in child.outputs
+                and self.ctx.failed_segments < self.inputs.max_failed_segments.value
+            ):
+                self.ctx.failed_segments += 1
+                self.report(
+                    f"spectral CalcJob<{child.pk}> produced no status (exit status "
+                    f"{child.exit_status}); retrying from its preserved remote folder "
+                    f"({self.ctx.failed_segments}/{self.inputs.max_failed_segments.value})"
+                )
+                return None
+            self.report(
+                f"spectral CalcJob<{child.pk}> failed without a usable status "
+                f"(exit status {child.exit_status})"
+            )
             self._emit_outputs()
-            return self.exit_codes.ERROR_SEGMENT_FAILED
+            return self.exit_codes.ERROR_FAILED_SEGMENTS
 
         parameters = self.ctx.current_plan["parameters"]
         try:
@@ -247,11 +272,17 @@ class SpinSpectraWorkChain(WorkChain):
             return self.exit_codes.ERROR_INVALID_PROGRESS
 
         self.ctx.stalled_segments = 0 if status["made_progress"] else self.ctx.stalled_segments + 1
+        self.ctx.failed_segments = 0
         self.ctx.previous_status = status
         self.ctx.previous_status_node = child.outputs.segment_status
         self.ctx.previous_summary_node = child.outputs.segment_summary
         self.ctx.previous_folder = child.outputs.remote_folder
         self.ctx.complete = status["state"] == "complete"
+        if not child.is_finished_ok:
+            self.report(
+                f"spectral CalcJob<{child.pk}> exited with status {child.exit_status}, "
+                "but supplied a valid checkpoint status; continuing safely"
+            )
         for label in ("spectrum", "collection_report", "task_timings"):
             if label in child.outputs:
                 self.ctx.result_nodes[label] = child.outputs[label]
@@ -323,6 +354,7 @@ class SpinChainWorkChain(WorkChain):
         spec.input("max_segments", valid_type=orm.Int, default=lambda: orm.Int(6))
         spec.input("max_node_hours", valid_type=orm.Float, default=lambda: orm.Float(100.0))
         spec.input("max_stalled_segments", valid_type=orm.Int, default=lambda: orm.Int(1))
+        spec.input("max_failed_segments", valid_type=orm.Int, default=lambda: orm.Int(1))
         spec.outline(
             cls.setup,
             cls.submit_ground_state,
@@ -375,6 +407,8 @@ class SpinChainWorkChain(WorkChain):
                 raise ContractError("max_node_hours must be > 0")
             if self.inputs.max_stalled_segments.value < 1:
                 raise ContractError("max_stalled_segments must be >= 1")
+            if self.inputs.max_failed_segments.value < 0:
+                raise ContractError("max_failed_segments must be >= 0")
             if (
                 self.inputs.ground_state_code.computer.uuid
                 != self.inputs.spectral_code.computer.uuid
@@ -458,6 +492,7 @@ class SpinChainWorkChain(WorkChain):
             "max_segments": self.inputs.max_segments,
             "max_node_hours": self.inputs.max_node_hours,
             "max_stalled_segments": self.inputs.max_stalled_segments,
+            "max_failed_segments": self.inputs.max_failed_segments,
             "metadata": {"label": "ITensor adaptive spectral workflow"},
         }
         future = self.submit(SpinSpectraWorkChain, **inputs)

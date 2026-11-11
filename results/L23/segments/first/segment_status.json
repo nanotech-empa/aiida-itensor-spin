@@ -1,0 +1,15 @@
+{
+  "backend": "streaming",
+  "chebyshev_convention": "chebyshev-2n-minus-1-v2",
+  "completed_tasks": 65,
+  "format_version": 1,
+  "ground_states": 1,
+  "length": 23,
+  "progress_units_completed": 21818,
+  "progress_units_total": 22494,
+  "recurrence_target_per_task": 326,
+  "segment_index": 0,
+  "state": "checkpointed",
+  "threading_mode": "blocksparse",
+  "total_tasks": 69
+}
