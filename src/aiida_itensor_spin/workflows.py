@@ -469,13 +469,15 @@ class AdaptiveSpinSpectraWorkChain(BaseRestartWorkChain):
     def _prepare_process_inputs(self):
         plan = self.ctx.current_plan
         layout = plan["selected_layout"]
+        # AiiDA resets iteration on max-iteration pause/play; child history does not reset.
+        segment_index = len(self.ctx.get("children", []))
         inputs = {
             "code": self.inputs.code,
             "ground_state": self.inputs.ground_state,
             "resource_plan": self.ctx.current_plan_node,
-            "segment_index": orm.Int(self.ctx.iteration),
+            "segment_index": orm.Int(segment_index),
             "metadata": {
-                "label": f"ITensor adaptive spectral segment {self.ctx.iteration + 1}",
+                "label": f"ITensor adaptive spectral segment {segment_index + 1}",
                 "options": {
                     "resources": {
                         "num_machines": layout["nodes"],
@@ -510,8 +512,9 @@ class AdaptiveSpinSpectraWorkChain(BaseRestartWorkChain):
     def run_process(self):
         plan = self.ctx.current_plan
         layout = plan["selected_layout"]
+        segment_number = len(self.ctx.get("children", [])) + 1
         self.report(
-            f"adaptive segment {self.ctx.iteration + 1}: {plan['pending_tasks']} unfinished "
+            f"adaptive segment {segment_number}: {plan['pending_tasks']} unfinished "
             f"task(s); proposing {layout['nodes']} node(s) x "
             f"{layout['processes_per_node']} processes/node x "
             f"{layout['threads_per_process']} threads/process = {plan['workers']} workers"
@@ -624,7 +627,7 @@ class AdaptiveSpinSpectraWorkChain(BaseRestartWorkChain):
             if label in node.outputs:
                 self.ctx.result_nodes[label] = node.outputs[label]
         self.report(
-            f"adaptive segment {self.ctx.iteration}: {status['completed_tasks']}/"
+            f"adaptive segment {len(self.ctx.children)}: {status['completed_tasks']}/"
             f"{status['total_tasks']} tasks; recurrence "
             f"{status['progress_units_completed']}/{status['progress_units_total']}; "
             f"diagnostic={diagnostics['failure_kind']}"
