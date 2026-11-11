@@ -9,6 +9,7 @@ from aiida.common import CalcInfo, CodeInfo
 from aiida.engine import CalcJob
 
 from .contracts import normalize_ground_state_parameters, normalize_layout, normalize_parameters
+from .graphs import GRAPH_MODEL_IDENTIFIER
 
 
 class GroundStateCalculation(CalcJob):
@@ -18,6 +19,12 @@ class GroundStateCalculation(CalcJob):
     def define(cls, spec):
         super().define(spec)
         spec.input("parameters", valid_type=orm.Dict)
+        spec.input(
+            "scan_only",
+            valid_type=orm.Bool,
+            default=lambda: orm.Bool(False),
+            help="Only determine the lowest energy in one conserved-Sz sector.",
+        )
         spec.output("ground_state", valid_type=orm.SinglefileData, required=False)
         spec.output("ground_state_metadata", valid_type=orm.Dict, required=False)
         spec.output("ground_state_summary", valid_type=orm.SinglefileData, required=False)
@@ -30,6 +37,10 @@ class GroundStateCalculation(CalcJob):
 
     def prepare_for_submission(self, folder):
         parameters = normalize_ground_state_parameters(self.inputs.parameters.get_dict())
+        if parameters["model"] == GRAPH_MODEL_IDENTIFIER and not self.inputs.code.base.extras.get(
+            "supports_spin_graph", False
+        ):
+            raise ValueError("Choose an isolated spin-graph-capable ground-state Code")
         resources = self.inputs.metadata.options.resources
         threads = int(resources.get("num_cores_per_mpiproc", 1))
         with folder.open("ground_state.json", "w", encoding="utf8") as handle:
@@ -37,7 +48,10 @@ class GroundStateCalculation(CalcJob):
                 {
                     "format_version": 1,
                     "parameters": parameters,
-                    "execution": {"threads_per_process": threads},
+                    "execution": {
+                        "threads_per_process": threads,
+                        "scan_only": self.inputs.scan_only.value,
+                    },
                 },
                 handle,
                 indent=2,
@@ -55,7 +69,9 @@ class GroundStateCalculation(CalcJob):
         calc_info = CalcInfo()
         calc_info.uuid = self.uuid
         calc_info.codes_info = [code_info]
-        calc_info.retrieve_list = ["gs_checkpoint.jld2", "gs_summary.txt", "gs_status.json"]
+        calc_info.retrieve_list = ["gs_summary.txt", "gs_status.json"]
+        if not self.inputs.scan_only.value:
+            calc_info.retrieve_list.insert(0, "gs_checkpoint.jld2")
         return calc_info
 
 
@@ -75,6 +91,7 @@ class SpectralSegmentCalculation(CalcJob):
         spec.input("segment_index", valid_type=orm.Int)
         spec.output("segment_status", valid_type=orm.Dict, required=False)
         spec.output("segment_summary", valid_type=orm.Dict, required=False)
+        spec.output("segment_diagnostics", valid_type=orm.Dict, required=False)
         spec.output("spectrum", valid_type=orm.SinglefileData, required=False)
         spec.output("collection_report", valid_type=orm.SinglefileData, required=False)
         spec.output("task_timings", valid_type=orm.SinglefileData, required=False)
@@ -96,6 +113,10 @@ class SpectralSegmentCalculation(CalcJob):
         if plan.get("state") != "selected":
             raise ValueError("resource_plan must have state='selected'")
         parameters = normalize_parameters(plan["parameters"])
+        if parameters.get("max_bond_dimension", 0) and not self.inputs.code.base.extras.get(
+            "supports_spectral_bond_cap", False
+        ):
+            raise ValueError("Selected Code does not declare spectral bond-cap support; use the updated engine")
         layout = normalize_layout(plan["selected_layout"])
         workers = plan.get("workers")
         capacity = layout["nodes"] * layout["processes_per_node"]
@@ -163,5 +184,73 @@ class SpectralSegmentCalculation(CalcJob):
             "scheduler-stdout.txt",
             "scheduler-stderr.txt",
             "compact_result",
+        ]
+        return calc_info
+
+
+class SpectralInventoryCalculation(CalcJob):
+    """Inventory checkpoint progress in an immutable spectral RemoteData folder."""
+
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.input("ground_state", valid_type=orm.SinglefileData)
+        spec.input("parent_folder", valid_type=orm.RemoteData)
+        spec.input("parameters", valid_type=orm.Dict)
+        spec.input("segment_index", valid_type=orm.Int, default=lambda: orm.Int(0))
+        spec.output("segment_status", valid_type=orm.Dict)
+        spec.output("inventory_summary", valid_type=orm.Dict)
+        spec.exit_code(320, "ERROR_MISSING_RETRIEVED", message="No retrieved folder found.")
+        spec.exit_code(321, "ERROR_MISSING_STATUS", message="Inventory status is missing.")
+        spec.exit_code(322, "ERROR_INVALID_STATUS", message="Inventory status is invalid.")
+        spec.inputs["metadata"]["options"]["parser_name"].default = "itensor_spin.spectral_inventory"
+        spec.inputs["metadata"]["options"]["withmpi"].default = False
+
+    def prepare_for_submission(self, folder):
+        parameters = normalize_parameters(self.inputs.parameters.get_dict())
+        if self.inputs.parent_folder.computer.uuid != self.inputs.code.computer.uuid:
+            raise ValueError("parent_folder and code must use the same computer")
+        config = {
+            "format_version": 1,
+            "segment_index": self.inputs.segment_index.value,
+            "parameters": parameters,
+            "ground_state": "gs_checkpoint.jld2",
+            "resume_state": "resume_state",
+            "status_file": "inventory_status.json",
+            "summary_file": "inventory_summary.json",
+        }
+        with folder.open("inventory.json", "w", encoding="utf8") as handle:
+            json.dump(config, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+
+        code_info = CodeInfo()
+        code_info.code_uuid = self.inputs.code.uuid
+        code_info.cmdline_params = ["--inspect", "inventory.json"]
+        code_info.stdout_name = "scheduler-stdout.txt"
+        code_info.stderr_name = "scheduler-stderr.txt"
+        code_info.withmpi = False
+
+        calc_info = CalcInfo()
+        calc_info.uuid = self.uuid
+        calc_info.codes_info = [code_info]
+        calc_info.local_copy_list = [
+            (
+                self.inputs.ground_state.uuid,
+                self.inputs.ground_state.filename,
+                "gs_checkpoint.jld2",
+            )
+        ]
+        calc_info.remote_symlink_list = [
+            (
+                self.inputs.code.computer.uuid,
+                f"{self.inputs.parent_folder.get_remote_path()}/state",
+                "resume_state",
+            )
+        ]
+        calc_info.retrieve_list = [
+            "inventory_status.json",
+            "inventory_summary.json",
+            "scheduler-stdout.txt",
+            "scheduler-stderr.txt",
         ]
         return calc_info

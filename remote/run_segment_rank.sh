@@ -19,6 +19,8 @@ STOP_AFTER_N=${ITENSOR_SPIN_STOP_AFTER_N:-0}
 CHECKPOINT_EVERY=${ITENSOR_SPIN_CHECKPOINT_EVERY:-1}
 HEARTBEAT_EVERY=${ITENSOR_SPIN_HEARTBEAT_EVERY:-1}
 MANIFEST_ROOT=${ITENSOR_SPIN_MANIFEST_ROOT:?task manifest root is required}
+SPECTRAL_CUTOFF=${ITENSOR_SPIN_SPECTRAL_CUTOFF:-}
+MAX_BOND_DIMENSION=${ITENSOR_SPIN_MAX_BOND_DIMENSION:-0}
 ENV_ROOT=${CODE_ROOT}/ITensor_env
 JULIA_BIN=${ITENSOR_SPIN_JULIA:-/capstor/scratch/cscs/cpi/goncalo/.julia/gh200/juliaup/bin/julia}
 worker_dir=${WORKER_ROOT}/worker_${RANK}
@@ -31,6 +33,11 @@ mkdir -p "${worker_dir}"
 }
 echo "rank=${RANK}/${WORKERS}, host=$(hostname), threads=${THREADS}, deadline=${DEADLINE_EPOCH}"
 
+CUTOFF_ARGS=()
+if [[ -n "${SPECTRAL_CUTOFF}" ]]; then
+    CUTOFF_ARGS=(--spectral-cutoff "${SPECTRAL_CUTOFF}")
+fi
+
 export JULIA_NUM_THREADS=${THREADS},0
 exec "${JULIA_BIN}" --startup-file=no --project="${ENV_ROOT}" \
     "${CODE_ROOT}/chi_single_task_checkpoint.jl" \
@@ -41,9 +48,10 @@ exec "${JULIA_BIN}" --startup-file=no --project="${ENV_ROOT}" \
     --task-ids-file "${task_ids_file}" \
     --backend "${BACKEND}" \
     --threading-mode "${THREADING_MODE}" \
+    "${CUTOFF_ARGS[@]}" \
+    --max-bond-dimension "${MAX_BOND_DIMENSION}" \
     --resume true \
     --checkpoint-every "${CHECKPOINT_EVERY}" \
     --heartbeat-every "${HEARTBEAT_EVERY}" \
     --stop-after-n "${STOP_AFTER_N}" \
     --stop-before-epoch "${DEADLINE_EPOCH}"
-

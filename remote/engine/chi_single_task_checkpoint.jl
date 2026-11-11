@@ -112,6 +112,13 @@ backend == "streaming" ||
     error("The checkpointed single-task worker requires --backend streaming")
 checkpoint_every = parse(Int, get(options, "--checkpoint-every", "1"))
 heartbeat_every = parse(Int, get(options, "--heartbeat-every", "1"))
+spectral_cutoff_override =
+    haskey(options, "--spectral-cutoff") ?
+    parse(Float64, options["--spectral-cutoff"]) : nothing
+spectral_cutoff_override === nothing || spectral_cutoff_override > 0 ||
+    error("--spectral-cutoff must be positive")
+max_bond_dimension = parse(Int, get(options, "--max-bond-dimension", "0"))
+max_bond_dimension >= 0 || error("--max-bond-dimension must be >= 0")
 stop_after_value = parse(Int, get(options, "--stop-after-n", "0"))
 stop_after_n = stop_after_value > 0 ? stop_after_value : nothing
 stop_before_value = parse(Float64, get(options, "--stop-before-epoch", "0"))
@@ -176,7 +183,9 @@ assigned_tasks = [all_tasks[task_id] for task_id in task_ids]
 
 H = checkpoint["H"]
 E0_sym = minimum(checkpoint["En_sym"])
-cutoff = get(checkpoint, "spectral_cutoff", checkpoint["cutoff"])
+checkpoint_cutoff = get(checkpoint, "spectral_cutoff", checkpoint["cutoff"])
+cutoff = spectral_cutoff_override === nothing ?
+    checkpoint_cutoff : spectral_cutoff_override
 ωmax = checkpoint["ωmax"]
 Emax = checkpoint["Emax"]
 try_doubleN = checkpoint["try_doubleN"]
@@ -272,6 +281,7 @@ function process_task(local_index)
     end
 
     spectral_function = SpectralFunctionCheckpointed.spectral_function
+    compression_diagnostics = Dict{String,Any}()
     spectrum = try
         spectral_function(
         ψn_sym[task.state_index],
@@ -282,6 +292,8 @@ function process_task(local_index)
         ωmax,
         sites;
         cutoff=cutoff,
+        max_bond_dimension=max_bond_dimension,
+        compression_diagnostics=compression_diagnostics,
         Emax=Emax,
         try_doubleN=try_doubleN,
         ω_smearing=ω_smearing,
@@ -320,6 +332,9 @@ function process_task(local_index)
             strided_threads,
             checkpoint_filename,
             checkpoint_hash,
+            spectral_cutoff=cutoff,
+            max_bond_dimension,
+            compression_diagnostics,
             L,
             nstates,
             task_id=task.task_id,
@@ -340,6 +355,9 @@ function process_task(local_index)
     end
     atomic_add!(completed, 1)
     println("completed task=$(task.task_id) seconds=$task_seconds")
+    if get(compression_diagnostics, "cap_reached_bonds", 0) > 0
+        println("WARNING: task=$(task.task_id) max_bond_dimension=$max_bond_dimension reached; requested_cutoff=$cutoff max_discarded_weight=$(compression_diagnostics["max_discarded_weight"]) cutoff_exceeded_bonds=$(compression_diagnostics["cutoff_exceeded_bonds"]); this is not a final-spectrum error bound")
+    end
     flush(stdout)
 end
 
@@ -378,6 +396,8 @@ open(summary_filename, "w") do io
     write(io, "worker seconds = $worker_seconds\n")
     write(io, "checkpoint = $checkpoint_filename\n")
     write(io, "checkpoint sha256 = $checkpoint_hash\n")
+    write(io, "spectral cutoff = $cutoff\n")
+    write(io, "max bond dimension = $max_bond_dimension (0 means unlimited)\n")
     write(io, "start = $start_time\n")
     write(io, "finish = $(DateTime(now()))\n")
 end

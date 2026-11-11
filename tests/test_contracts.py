@@ -6,6 +6,7 @@ from aiida_itensor_spin.contracts import (
     MOMENT_CONVENTION,
     ContractError,
     add_discovered_task_count,
+    build_sector_ensemble_plan,
     normalize_ground_state_parameters,
     normalize_layout,
     normalize_parameters,
@@ -82,6 +83,14 @@ def test_parameters_require_corrected_chebyshev_convention():
                 "chebyshev_convention": "trusted-reference-2026-08",
             }
         )
+
+
+def test_spectral_cutoff_override_is_validated_and_preserved():
+    normalized = normalize_parameters({**PARAMETERS, "spectral_cutoff": 1e-8})
+    assert normalized["spectral_cutoff"] == 1e-8
+
+    with pytest.raises(ContractError, match="spectral_cutoff"):
+        normalize_parameters({**PARAMETERS, "spectral_cutoff": 0})
 
 
 def test_task_count_is_discovered_from_ground_state_metadata():
@@ -250,3 +259,93 @@ def test_post_gs_energy_window_is_validated():
         validate_ground_state_energy_window({"spectral_bandwidth_meV": 1.5})
     with pytest.raises(ContractError, match="highest minus ground"):
         validate_ground_state_energy_window({**metadata, "spectral_bandwidth_meV": 1.4})
+
+
+def test_sector_ensemble_plan_validates_physics_and_global_concurrency():
+    ground = {
+        "model": "mixed_spin_heisenberg_chain_v1",
+        "site_spins": [0.5, 1, 2, 1, 0.5],
+        "couplings_meV": [10.0, 10.0, 10.0, 10.0],
+        "seed": 7,
+    }
+    spectral = {
+        "max_nodes": 3,
+        "max_processes_per_node": 4,
+        "max_threads_per_process": 2,
+        "wallclock_seconds": 900,
+        "internal_stop_seconds": 780,
+        "partition": "debug",
+    }
+    plan = build_sector_ensemble_plan(
+        ground,
+        [4, 0, -4],
+        spectral,
+        {"max_total_nodes": 6, "max_concurrent_sectors": 3},
+    )
+    assert plan["requested_sectors"] == [-4, 0, 4]
+    assert plan["allowed_sectors"] == list(range(-10, 11, 2))
+    assert plan["sector_labels"] == ["twice_sz_m4", "twice_sz_p0", "twice_sz_p4"]
+    assert plan["scan_concurrent_sectors"] == 3
+    assert plan["concurrent_sectors"] == 2
+    assert plan["effective_spectral_resources"]["max_nodes"] == 3
+
+    clamped = build_sector_ensemble_plan(
+        ground,
+        [0, 2],
+        spectral,
+        {"max_total_nodes": 2, "max_concurrent_sectors": 2},
+    )
+    assert clamped["effective_spectral_resources"]["max_nodes"] == 2
+    assert clamped["concurrent_sectors"] == 1
+
+
+@pytest.mark.parametrize(
+    ("sectors", "message"),
+    [([1], "incompatible"), ([0, 0], "duplicated"), ([], "non-empty")],
+)
+def test_sector_ensemble_plan_rejects_invalid_requests(sectors, message):
+    ground = {
+        "model": "mixed_spin_heisenberg_chain_v1",
+        "site_spins": [0.5, 1, 2, 1, 0.5],
+        "couplings_meV": [10.0, 10.0, 10.0, 10.0],
+        "seed": 7,
+    }
+    spectral = {
+        "max_nodes": 1,
+        "max_processes_per_node": 4,
+        "max_threads_per_process": 2,
+        "wallclock_seconds": 900,
+        "internal_stop_seconds": 780,
+        "partition": "debug",
+    }
+    with pytest.raises(ContractError, match=message):
+        build_sector_ensemble_plan(
+            ground,
+            sectors,
+            spectral,
+            {"max_total_nodes": 1, "max_concurrent_sectors": 1},
+        )
+
+
+def test_sector_ensemble_rejects_ambiguous_or_unsupported_base_parameters():
+    spectral = {
+        "max_nodes": 1,
+        "max_processes_per_node": 1,
+        "max_threads_per_process": 1,
+        "wallclock_seconds": 900,
+        "internal_stop_seconds": 780,
+        "partition": "debug",
+    }
+    resources = {"max_total_nodes": 1, "max_concurrent_sectors": 1}
+    mixed = {
+        "model": "mixed_spin_heisenberg_chain_v1",
+        "site_spins": [0.5, 0.5, 0.5],
+        "couplings_meV": [1.0, 1.0],
+        "seed": 7,
+    }
+    with pytest.raises(ContractError, match="requested_sectors"):
+        build_sector_ensemble_plan({**mixed, "target_twice_sz": 1}, [1], spectral, resources)
+    with pytest.raises(ContractError, match="currently require"):
+        build_sector_ensemble_plan(
+            {"length": 3, "impurity_site": 2, "seed": 7}, [1], spectral, resources
+        )

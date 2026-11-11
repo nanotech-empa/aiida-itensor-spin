@@ -13,6 +13,7 @@ DEFAULT_CASE_ROOT = Path(__file__).resolve().parent / "engine"
 DEFAULT_JULIA = Path("/home/jovyan/opt/julia-1.12.6/bin/julia")
 LEGACY_MODEL = "spin1_chain_spinhalf_impurity_v1"
 MIXED_MODEL = "mixed_spin_heisenberg_chain_v1"
+GRAPH_MODEL = "mixed_spin_heisenberg_graph_v1"
 
 
 def model_command(parameters, case_root):
@@ -29,6 +30,12 @@ def model_command(parameters, case_root):
             str(parameters["JL_meV"]),
             "--JR-meV",
             str(parameters["JR_meV"]),
+        ]
+    if model == GRAPH_MODEL:
+        return case_root / "prepare_mixed_spin_gs.jl", [
+            "--two-spins", ",".join(str(round(2 * spin)) for spin in parameters["site_spins"]),
+            "--exchange-edges", ";".join(f"{e['i']},{e['j']},{e['J_meV']}" for e in parameters["exchange_edges"]),
+            "--target-twice-sz", str(parameters["target_twice_sz"]),
         ]
     if model == MIXED_MODEL:
         two_spins = [round(2 * spin) for spin in parameters["site_spins"]]
@@ -57,12 +64,15 @@ def main():
     threading_mode = parameters["threading_mode"]
     execution = config.get("execution", {})
     threads = int(execution.get("threads_per_process", 1))
+    scan_only = bool(execution.get("scan_only", False))
     if threads < 1:
         raise RuntimeError("execution.threads_per_process must be >= 1")
 
     case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))
     julia = Path(os.environ.get("ITENSOR_SPIN_JULIA", DEFAULT_JULIA))
     script, model_arguments = model_command(parameters, case_root)
+    if scan_only and model not in {MIXED_MODEL, GRAPH_MODEL}:
+        raise RuntimeError("sector scan mode requires the mixed-spin model")
     environment = os.environ.copy()
     environment.update(
         {
@@ -112,6 +122,8 @@ def main():
         str(parameters["omega_smearing_meV"]),
         "--try-doubleN",
         str(parameters["try_doubleN"]).lower(),
+        "--scan-only",
+        str(scan_only).lower(),
     ]
     with Path("gs-runtime-stdout.txt").open("w") as stdout, Path(
         "gs-runtime-stderr.txt"
@@ -119,11 +131,48 @@ def main():
         subprocess.run(
             command,
             check=True,
-            universal_newlines=True,
+            text=True,
             env=environment,
             stdout=stdout,
             stderr=stderr,
         )
+
+    if scan_only:
+        energy_fields = Path("gs_scan_energy.txt").read_text().split()
+        if len(energy_fields) != 3:
+            raise RuntimeError(f"invalid sector scan energy report: {energy_fields!r}")
+        reported_length = int(energy_fields[0])
+        reported_sector = int(energy_fields[1])
+        ground_energy = float(energy_fields[2])
+        if reported_length != length:
+            raise RuntimeError(
+                f"sector scan reports L={reported_length}, expected L={length}"
+            )
+        if reported_sector != int(parameters["target_twice_sz"]):
+            raise RuntimeError("sector scan reports a different target 2Sz")
+        status = {
+            "format_version": 1,
+            "state": "complete",
+            "scan_only": True,
+            "model": model,
+            "length": length,
+            "ground_states": 1,
+            "total_tasks": 0,
+            "ground_energy_meV": ground_energy,
+            "seed": seed,
+            "threading_mode": threading_mode,
+            "julia_threads": threads,
+            "elapsed_seconds": time.time() - started,
+            "execution_environment": "localhost-direct",
+            "hostname": os.uname().nodename,
+            "site_spins": parameters["site_spins"],
+            **({"exchange_edges": parameters["exchange_edges"]} if model == GRAPH_MODEL else {"couplings_meV": parameters["couplings_meV"]}),
+            "target_twice_sz": parameters["target_twice_sz"],
+        }
+        Path("gs_status.json").write_text(
+            json.dumps(status, indent=2, sort_keys=True) + "\n"
+        )
+        return 0
 
     checkpoint = Path("gs_checkpoint.jld2")
     dimensions = Path("gs_dimensions.txt").read_text().split()
@@ -144,6 +193,7 @@ def main():
     status = {
         "format_version": 1,
         "state": "complete",
+        "scan_only": False,
         "model": model,
         "length": length,
         "ground_states": ground_states,
@@ -167,7 +217,7 @@ def main():
         status.update(
             {
                 "site_spins": parameters["site_spins"],
-                "couplings_meV": parameters["couplings_meV"],
+                **({"exchange_edges": parameters["exchange_edges"]} if model == GRAPH_MODEL else {"couplings_meV": parameters["couplings_meV"]}),
                 "target_twice_sz": parameters["target_twice_sz"],
             }
         )

@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from pathlib import PurePosixPath
 from typing import Any
 
+from .graphs import GRAPH_MODEL_IDENTIFIER, normalize_spin_graph
+
 STATUS_FORMAT_VERSION = 1
 MAX_CORES_PER_DAINT_NODE = 288
 RECOMMENDED_THREADS_PER_PROCESS = 2
@@ -15,7 +17,7 @@ ALLOWED_THREADING_MODES = {"outer", "blocksparse"}
 MOMENT_CONVENTION = "chebyshev-2n-minus-1-v2"
 MODEL_IDENTIFIER = "spin1_chain_spinhalf_impurity_v1"
 MIXED_MODEL_IDENTIFIER = "mixed_spin_heisenberg_chain_v1"
-REGISTERED_MODELS = {MODEL_IDENTIFIER, MIXED_MODEL_IDENTIFIER}
+REGISTERED_MODELS = {MODEL_IDENTIFIER, MIXED_MODEL_IDENTIFIER, GRAPH_MODEL_IDENTIFIER}
 
 GROUND_STATE_DEFAULTS = {
     "model": MODEL_IDENTIFIER,
@@ -187,6 +189,11 @@ def normalize_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
     heartbeat_every = (
         _integer(value, "heartbeat_every", minimum=1) if "heartbeat_every" in value else 1
     )
+    spectral_cutoff = (
+        _positive_float(value, "spectral_cutoff")
+        if "spectral_cutoff" in value
+        else None
+    )
     checkpoint_name = safe_relative_path(
         str(value.get("ground_state_filename", "gs_checkpoint.jld2")),
         label="ground_state_filename",
@@ -202,6 +209,10 @@ def normalize_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
             "heartbeat_every": heartbeat_every,
         }
     )
+    if "spectral_cutoff" in value:
+        result["spectral_cutoff"] = spectral_cutoff
+    if "max_bond_dimension" in value:
+        result["max_bond_dimension"] = _integer(value, "max_bond_dimension", minimum=0)
     if "expected_total_tasks" in value:
         result["expected_total_tasks"] = _integer(value, "expected_total_tasks", minimum=1)
     return result
@@ -274,8 +285,7 @@ def validate_ground_state_energy_window(
         omega_max, bandwidth, rel_tol=1e-12, abs_tol=1e-12
     ):
         raise ContractError(
-            f"omega_max_meV={omega_max:g} exceeds the GS spectral bandwidth "
-            f"{bandwidth:g} meV"
+            f"omega_max_meV={omega_max:g} exceeds the GS spectral bandwidth {bandwidth:g} meV"
         )
     return values
 
@@ -298,14 +308,10 @@ def _common_ground_state_parameters(
         "dmrg_cutoff": _positive_float(supplied, "dmrg_cutoff"),
         "spectral_cutoff": _positive_float(supplied, "spectral_cutoff"),
         "energy_precision_meV": _positive_float(supplied, "energy_precision_meV"),
-        "highest_energy_precision_meV": _positive_float(
-            supplied, "highest_energy_precision_meV"
-        ),
+        "highest_energy_precision_meV": _positive_float(supplied, "highest_energy_precision_meV"),
         "initial_linkdim": _integer(supplied, "initial_linkdim", minimum=1),
         "excited_states": _integer(supplied, "excited_states", minimum=0),
-        "excited_state_penalty_meV": _positive_float(
-            supplied, "excited_state_penalty_meV"
-        ),
+        "excited_state_penalty_meV": _positive_float(supplied, "excited_state_penalty_meV"),
         "temperature_K": temperature,
         "symmetry_tolerance": _positive_float(supplied, "symmetry_tolerance"),
         "omega_max_meV": _positive_float(supplied, "omega_max_meV"),
@@ -367,11 +373,17 @@ def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any
             **common,
         }
 
-    site_spins = _normalize_site_spins(value.get("site_spins"))
+    graph = None
+    if model == GRAPH_MODEL_IDENTIFIER:
+        try:
+            graph = normalize_spin_graph(value)
+        except (TypeError, ValueError) as exception:
+            raise ContractError(str(exception)) from exception
+    site_spins = graph["site_spins"] if graph is not None else _normalize_site_spins(value.get("site_spins"))
     length = len(site_spins)
-    if "length" in value and _integer(value, "length", minimum=3) != length:
+    if "length" in value and _integer(value, "length", minimum=2 if graph is not None else 3) != length:
         raise ContractError("length must equal len(site_spins)")
-    couplings = _normalize_couplings(value.get("couplings_meV"), length)
+    topology = graph if graph is not None else {"couplings_meV": _normalize_couplings(value.get("couplings_meV"), length)}
     twice_spins = [round(2 * spin) for spin in site_spins]
     target = value.get("target_twice_sz", sum(twice_spins) % 2)
     if isinstance(target, bool) or not isinstance(target, int):
@@ -382,9 +394,79 @@ def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any
         "model": model,
         "length": length,
         "site_spins": site_spins,
-        "couplings_meV": couplings,
+        **topology,
         "target_twice_sz": target,
         **common,
+    }
+
+
+def build_sector_ensemble_plan(
+    ground_state_parameters: Mapping[str, Any],
+    requested_sectors: list[Any],
+    spectral_resource_limits: Mapping[str, Any],
+    ensemble_resources: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate sectors and derive a conservative globally bounded execution plan.
+
+    Sectors are represented by ``2 * Sz`` so every label remains integral. The
+    current ensemble implementation is deliberately limited to Hamiltonian
+    adapters that expose an explicit conserved-Sz contract.
+    """
+    if "target_twice_sz" in ground_state_parameters:
+        raise ContractError(
+            "target_twice_sz must be supplied through requested_sectors for an ensemble"
+        )
+    normalized = normalize_ground_state_parameters(ground_state_parameters)
+    if normalized["model"] not in {MIXED_MODEL_IDENTIFIER, GRAPH_MODEL_IDENTIFIER}:
+        raise ContractError(f"sector ensembles currently require model {MIXED_MODEL_IDENTIFIER!r}")
+    if not isinstance(requested_sectors, list) or not requested_sectors:
+        raise ContractError("requested_sectors must be a non-empty list")
+
+    total_twice_spin = sum(round(2 * spin) for spin in normalized["site_spins"])
+    allowed_sectors = list(range(-total_twice_spin, total_twice_spin + 1, 2))
+    sectors: list[int] = []
+    for value in requested_sectors:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ContractError("every requested sector must be an integer value of 2Sz")
+        if value not in allowed_sectors:
+            raise ContractError(f"requested 2Sz={value} is incompatible with the supplied spins")
+        if value in sectors:
+            raise ContractError(f"requested sector 2Sz={value} is duplicated")
+        sectors.append(value)
+    sectors.sort()
+
+    spectral_limits = normalize_resource_limits(spectral_resource_limits)
+    max_total_nodes = _integer(ensemble_resources, "max_total_nodes", minimum=1)
+    max_concurrent = _integer(ensemble_resources, "max_concurrent_sectors", minimum=1)
+    per_sector_max_nodes = min(spectral_limits["max_nodes"], max_total_nodes)
+    effective_limits = {**spectral_limits, "max_nodes": per_sector_max_nodes}
+    concurrency = min(
+        len(sectors),
+        max_concurrent,
+        max_total_nodes // per_sector_max_nodes,
+    )
+    scan_concurrency = min(len(sectors), max_concurrent, max_total_nodes)
+    if concurrency < 1:
+        raise ContractError("global node ceiling cannot accommodate one sector")
+
+    labels = [f"twice_sz_{'m' if sector < 0 else 'p'}{abs(sector)}" for sector in sectors]
+    return {
+        "state": "selected",
+        "model": normalized["model"],
+        "site_spins": normalized["site_spins"],
+        "allowed_sectors": allowed_sectors,
+        "requested_sectors": sectors,
+        "sector_labels": labels,
+        "max_total_nodes": max_total_nodes,
+        "max_concurrent_sectors": max_concurrent,
+        "scan_concurrent_sectors": scan_concurrency,
+        "concurrent_sectors": concurrency,
+        "effective_spectral_resources": effective_limits,
+        "reason": (
+            "one-node sector scans and selected spectral WorkChains are independent; "
+            "each stage is separately capped so its concurrent node ceilings cannot "
+            "exceed max_total_nodes"
+        ),
     }
 
 

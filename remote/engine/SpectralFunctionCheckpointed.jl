@@ -7,6 +7,9 @@ using JLD2
 using ..Operators
 using ..SpectralFunction
 
+include("BondDimensionControl.jl")
+using .BondDimensionControl
+
 const MOMENT_CONVENTION = "chebyshev-2n-minus-1-v2"
 const CHECKPOINT_FORMAT_VERSION = 2
 
@@ -32,6 +35,8 @@ function Chebyshev_moments_streaming(
     B::MPO,
     N::Int;
     cutoff::Float64=1e-8,
+    max_bond_dimension::Int=0,
+    compression_diagnostics::Union{Dict,Nothing}=nothing,
     doubleN::Bool=false,
     dK::Union{Int,Nothing}=nothing,
     nsweeps::Union{Int,Nothing}=nothing,
@@ -45,6 +50,10 @@ function Chebyshev_moments_streaming(
 )
     energy_truncation =
         dK !== nothing && nsweeps !== nothing && ϵP !== nothing
+    max_bond_dimension >= 0 || error("max_bond_dimension must be >= 0")
+    energy_truncation && max_bond_dimension > 0 &&
+        error("A bond cap is not yet supported with high-energy projection")
+    report = compression_report(max_bond_dimension, cutoff)
     checkpoint_every >= 1 || error("checkpoint_every must be >= 1")
     heartbeat_every >= 1 || error("heartbeat_every must be >= 1")
     stop_before_epoch === nothing || stop_before_epoch > 0 ||
@@ -63,6 +72,8 @@ function Chebyshev_moments_streaming(
             completed_n,
             N,
             cutoff,
+            max_bond_dimension,
+            compression_diagnostics=report,
             doubleN,
             energy_truncation,
             dK,
@@ -124,13 +135,32 @@ function Chebyshev_moments_streaming(
             error("Recurrence checkpoint has invalid moments length")
         tnm2 = progress["tnm2"]
         tnm1 = progress["tnm1"]
+        old_cap = get(progress, "max_bond_dimension", 0)
+        if haskey(progress, "compression_diagnostics")
+            report = progress["compression_diagnostics"]
+            report["max_bond_dimension"] = max_bond_dimension
+            report["measurement"] = max_bond_dimension > 0 ? "density-matrix-discarded-weight" : "not_measured"
+        end
+        if old_cap != max_bond_dimension
+            transition = Dict("from_iteration" => completed_n + 1,
+                "previous_max_bond_dimension" => old_cap,
+                "max_bond_dimension" => max_bond_dimension,
+                "earlier_moments_preserved" => true)
+            push!(report["policy_history"], transition)
+            println("WARNING: bond policy changes after completed_n=$completed_n from maxdim=$old_cap to maxdim=$max_bond_dimension; earlier moments are preserved, not recomputed")
+            tnm2 = compress_resume!(tnm2, report, completed_n, "resume_previous_vector")
+            tnm1 = compress_resume!(tnm1, report, completed_n, "resume_current_vector")
+            save_progress(completed_n, moments, tnm2, tnm1)
+        end
         println(
             "resumed recurrence completed_n=$completed_n next_n=$(completed_n + 1) " *
             "checkpoint=$checkpoint_filename",
         )
         flush(stdout)
     else
-        t0 = apply(C, ψ0; cutoff=cutoff)
+        push!(report["policy_history"], Dict("from_iteration" => 1,
+            "max_bond_dimension" => max_bond_dimension))
+        t0 = controlled_apply(C, ψ0, report, 1, "initial_operator")
         if energy_truncation
             println("energy truncation of |t_1>")
             t0 = SpectralFunction.proj_highE(
@@ -143,7 +173,7 @@ function Chebyshev_moments_streaming(
             )
         end
 
-        t1 = apply(H, t0; cutoff=cutoff)
+        t1 = controlled_apply(H, t0, report, 2, "hamiltonian")
         if energy_truncation
             println("\nenergy truncation of |t_2>")
             t1 = SpectralFunction.proj_highE(
@@ -178,10 +208,18 @@ function Chebyshev_moments_streaming(
         save_progress(completed_n, moments, tnm2, tnm1)
     end
 
+    last_iteration_seconds = nothing
     for n in (completed_n + 1):N
+        if stop_before_epoch !== nothing && last_iteration_seconds !== nothing
+            required_seconds = max(600.0, 2.0 * last_iteration_seconds)
+            if time() + required_seconds >= stop_before_epoch
+                save_progress(completed_n, moments, tnm2, tnm1)
+                throw(IntentionalCheckpointStop(completed_n))
+            end
+        end
         iteration_start = time()
-        tmp = 2 * apply(H, tnm1; cutoff=cutoff)
-        tn = add(tmp, -tnm2; cutoff=cutoff)
+        tmp = 2 * controlled_apply(H, tnm1, report, n, "hamiltonian")
+        tn = controlled_add(tmp, -tnm2, report, n, "recurrence_sum")
         if energy_truncation
             println("\nenergy truncation of |t_", n, ">")
             tn = SpectralFunction.proj_highE(
@@ -203,11 +241,12 @@ function Chebyshev_moments_streaming(
         end
         tnm2, tnm1 = tnm1, tn
         completed_n = n
+        last_iteration_seconds = time() - iteration_start
 
         if n % heartbeat_every == 0 || n == N
             println(
                 "progress completed_n=$n/$N " *
-                "iteration_seconds=$(time() - iteration_start) " *
+                "iteration_seconds=$last_iteration_seconds " *
                 "elapsed_seconds=$(time() - recurrence_start) " *
                 "maxlinkdim=$(maxlinkdim(tnm1))",
             )
@@ -222,6 +261,10 @@ function Chebyshev_moments_streaming(
         should_stop && throw(IntentionalCheckpointStop(n))
     end
 
+    if compression_diagnostics !== nothing
+        empty!(compression_diagnostics)
+        merge!(compression_diagnostics, report)
+    end
     return moments
 end
 
@@ -234,6 +277,8 @@ function spectral_function(
     ωmax::Float64,
     sites;
     cutoff::Float64=1e-8,
+    max_bond_dimension::Int=0,
+    compression_diagnostics::Union{Dict,Nothing}=nothing,
     ϵt::Float64=0.025,
     Nω::Union{Int,Nothing}=nothing,
     Emax::Union{Float64,Nothing}=nothing,
@@ -345,6 +390,8 @@ function spectral_function(
             B,
             N;
             cutoff=cutoff,
+            max_bond_dimension=max_bond_dimension,
+            compression_diagnostics=compression_diagnostics,
             doubleN=doubleN,
             dK=dK,
             nsweeps=nsweeps,
@@ -364,6 +411,8 @@ function spectral_function(
             B,
             N;
             cutoff=cutoff,
+            max_bond_dimension=max_bond_dimension,
+            compression_diagnostics=compression_diagnostics,
             doubleN=doubleN,
             checkpoint_filename=checkpoint_filename,
             checkpoint_key=checkpoint_key,

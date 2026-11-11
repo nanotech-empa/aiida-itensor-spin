@@ -1,0 +1,315 @@
+{
+  "l101": [
+    {
+      "file": "remote/engine/GenericSpinSites.jl",
+      "remote_sha256": "e6fa03d329ac02462d8688911d224c94304de57d3af1be37a51e16bdd7e8ce3d",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_env/Manifest.toml",
+      "remote_sha256": "82e919f11c298f6bb9882cd4a3772c47cfd93aaffea3018d3f7b30662e9be28a",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_env/Project.toml",
+      "remote_sha256": "d57ca8566d07e89f7a9270de236d16f922da3277ef2c1cc3a71de26a52daa148",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/AuxFunctions.jl",
+      "remote_sha256": "61f761e57cc4a369f3a6427c5168dac84e0ac8adc5e1e8a63acda5fa433262c0",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/DMRGsweeps.jl",
+      "remote_sha256": "f5f641860c4b1c70c2d36ba685018ed83aa801f20efe745c034b935e0099d538",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/Hamiltonians.jl",
+      "remote_sha256": "27fbc3600b15f28d7c2ac7fa6223ccf411f7428f944eaf0a3fa63e665e70fa3b",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/Imports.jl",
+      "remote_sha256": "73f4cbc8a51e83edf42cc9f3ee1dfeffacc6838b1005e83d4a804528d62e61b6",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/Operators.jl",
+      "remote_sha256": "f778a3676518f953c0de0dc9dbf0ac73e67fc0a8ae07656ec5f49ab9f3412614",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/SpectralFunction.jl",
+      "remote_sha256": "ed7c7374083e735dada41ec7fb507bb95186e3f67d1a1da7c2504af849b4c3a0",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/SpectralFunctionCheckpointed.jl",
+      "remote_sha256": "fd9a3aebd1a342f8be0ffebee551120533a2e77afcb0a283e4fdce655821d24c",
+      "matches_committed_HEAD": true,
+      "matches_working_file": false
+    },
+    {
+      "file": "remote/engine/checkpoint_info.jl",
+      "remote_sha256": "13a695096689e8f3c8aaee35178745c9113e6104c61993f281f01d20a19de55d",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/chi_reference_task.jl",
+      "remote_sha256": "f9f5c383d167df2e3216a388af2dc70bdbfbcaa2f3077bb737ed38685a90353b",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/chi_single_task_checkpoint.jl",
+      "remote_sha256": "85625824204c26ac30620ee136eee1067350e78f0582c6cc3eae2b1c269c111b",
+      "matches_committed_HEAD": true,
+      "matches_working_file": false
+    },
+    {
+      "file": "remote/engine/collect_tasks.jl",
+      "remote_sha256": "7184df605283c7b3947d61d4db99b3211958ddd920e9155dbce8977d2ea4c958",
+      "matches_committed_HEAD": true,
+      "matches_working_file": false
+    },
+    {
+      "file": "remote/itensor-spin-gs",
+      "remote_sha256": "88e4989a8f78a83bdef2ef5a5bc870414f00c98d6297339475e05044886f3a0c",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/itensor-spin-segment",
+      "remote_sha256": "15348477d030e61ed52173894bc0aba34846ae66e5c3edef4093dcce7ba5f48e",
+      "matches_committed_HEAD": true,
+      "matches_working_file": false
+    },
+    {
+      "file": "remote/engine/prepare_gs.jl",
+      "remote_sha256": "613590e89972886282cfa7194858ca125f116402ef72d6d3f9f3e5d3746836fa",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/prepare_mixed_spin_gs.jl",
+      "remote_sha256": "e207ea6ea6e3cc12a1afd906dd35f63cd5c9c36eb972b419a2de218cda2ea844",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/run_segment_rank.sh",
+      "remote_sha256": "f80150eecc316dd9a98ce735c43bd21e5513d3ddec1090c3e073cfb943871b8e",
+      "matches_committed_HEAD": true,
+      "matches_working_file": false
+    },
+    {
+      "file": "remote/segment_progress.jl",
+      "remote_sha256": "58a114fff06d165b3c0fe46e2472d591a6ec49835318eadca1b608a08dd4e607",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    }
+  ],
+  "l50": [
+    {
+      "file": "remote/engine/BondDimensionControl.jl",
+      "remote_sha256": "b460c949c9dbb561a9d2c8b68e48d6b8ad5747b3d99c35677cfd4cadbc74f574",
+      "matches_committed_HEAD": false,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/GenericSpinSites.jl",
+      "remote_sha256": "e6fa03d329ac02462d8688911d224c94304de57d3af1be37a51e16bdd7e8ce3d",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_env/Manifest.toml",
+      "remote_sha256": "82e919f11c298f6bb9882cd4a3772c47cfd93aaffea3018d3f7b30662e9be28a",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_env/Project.toml",
+      "remote_sha256": "d57ca8566d07e89f7a9270de236d16f922da3277ef2c1cc3a71de26a52daa148",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/AuxFunctions.jl",
+      "remote_sha256": "61f761e57cc4a369f3a6427c5168dac84e0ac8adc5e1e8a63acda5fa433262c0",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/DMRGsweeps.jl",
+      "remote_sha256": "f5f641860c4b1c70c2d36ba685018ed83aa801f20efe745c034b935e0099d538",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/Hamiltonians.jl",
+      "remote_sha256": "27fbc3600b15f28d7c2ac7fa6223ccf411f7428f944eaf0a3fa63e665e70fa3b",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/Imports.jl",
+      "remote_sha256": "73f4cbc8a51e83edf42cc9f3ee1dfeffacc6838b1005e83d4a804528d62e61b6",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/Operators.jl",
+      "remote_sha256": "f778a3676518f953c0de0dc9dbf0ac73e67fc0a8ae07656ec5f49ab9f3412614",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/ITensor_libs/SpectralFunction.jl",
+      "remote_sha256": "ed7c7374083e735dada41ec7fb507bb95186e3f67d1a1da7c2504af849b4c3a0",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/SpectralFunctionCheckpointed.jl",
+      "remote_sha256": "a78729dafb730aa4d8759be311b0d0693a18b37dc1c0a9a92c97ca8ab86ceeb0",
+      "matches_committed_HEAD": false,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/THIRD_PARTY_LICENSE_ITensorMPS.txt",
+      "remote_sha256": "52cc73c7479a772e42cee6f3e0fa266d61c26eae8a9fed9e91fe2870bc92651a",
+      "matches_committed_HEAD": false,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/checkpoint_info.jl",
+      "remote_sha256": "13a695096689e8f3c8aaee35178745c9113e6104c61993f281f01d20a19de55d",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/chi_reference_task.jl",
+      "remote_sha256": "f9f5c383d167df2e3216a388af2dc70bdbfbcaa2f3077bb737ed38685a90353b",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/chi_single_task_checkpoint.jl",
+      "remote_sha256": "7363537534f2cb2d2c2ca31a682f4bfab4e4b4709ba031bb199b0b207a041d72",
+      "matches_committed_HEAD": false,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/collect_tasks.jl",
+      "remote_sha256": "e1ad61a742fb747a1181cec32e43cf314a43e9ae74b3afb7a01878104b95bf6d",
+      "matches_committed_HEAD": false,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/itensor-spin-gs",
+      "remote_sha256": "88e4989a8f78a83bdef2ef5a5bc870414f00c98d6297339475e05044886f3a0c",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/itensor-spin-segment",
+      "remote_sha256": "c4a0af28b5334d6dc408254c22b609694be36696ce89be6852a24f16e9b572aa",
+      "matches_committed_HEAD": false,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/prepare_gs.jl",
+      "remote_sha256": "613590e89972886282cfa7194858ca125f116402ef72d6d3f9f3e5d3746836fa",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/engine/prepare_mixed_spin_gs.jl",
+      "remote_sha256": "e207ea6ea6e3cc12a1afd906dd35f63cd5c9c36eb972b419a2de218cda2ea844",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/run_segment_rank.sh",
+      "remote_sha256": "742dff81f4ddbc304d20a44ea91ef43db27f42d97183629d1b7a56c737041570",
+      "matches_committed_HEAD": false,
+      "matches_working_file": true
+    },
+    {
+      "file": "remote/segment_progress.jl",
+      "remote_sha256": "58a114fff06d165b3c0fe46e2472d591a6ec49835318eadca1b608a08dd4e607",
+      "matches_committed_HEAD": true,
+      "matches_working_file": true
+    }
+  ],
+  "notebook_copies": [
+    {
+      "file": "search-0.ipynb",
+      "canonical": "search.ipynb",
+      "same_cell_types_and_sources": true
+    },
+    {
+      "file": "search-1.ipynb",
+      "canonical": "search.ipynb",
+      "same_cell_types_and_sources": true
+    },
+    {
+      "file": "search-2.ipynb",
+      "canonical": "search.ipynb",
+      "same_cell_types_and_sources": true
+    },
+    {
+      "file": "submit-0.ipynb",
+      "canonical": "submit.ipynb",
+      "same_cell_types_and_sources": true
+    },
+    {
+      "file": "submit-2.ipynb",
+      "canonical": "submit.ipynb",
+      "same_cell_types_and_sources": true
+    },
+    {
+      "file": "view-0.ipynb",
+      "canonical": "view.ipynb",
+      "same_cell_types_and_sources": true
+    },
+    {
+      "file": "view-1.ipynb",
+      "canonical": "view.ipynb",
+      "same_cell_types_and_sources": true
+    },
+    {
+      "file": "view-2.ipynb",
+      "canonical": "view.ipynb",
+      "same_cell_types_and_sources": true
+    },
+    {
+      "file": "view-3.ipynb",
+      "canonical": "view.ipynb",
+      "same_cell_types_and_sources": true
+    },
+    {
+      "file": "view-4.ipynb",
+      "canonical": "view.ipynb",
+      "same_cell_types_and_sources": true
+    },
+    {
+      "file": "view-5.ipynb",
+      "canonical": "view.ipynb",
+      "same_cell_types_and_sources": true
+    }
+  ]
+}

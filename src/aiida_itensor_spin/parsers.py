@@ -23,6 +23,36 @@ def _read_json(retrieved, filename: str):
     return value
 
 
+def _segment_diagnostics(retrieved, names: set[str]) -> dict:
+    """Classify scheduler/driver failures without making stderr part of workflow logic."""
+    chunks = []
+    for filename in ("scheduler-stderr.txt", "_scheduler-stderr.txt"):
+        if filename not in names:
+            continue
+        try:
+            with retrieved.base.repository.open(filename, mode="r") as handle:
+                chunks.append(handle.read())
+        except (OSError, UnicodeError):
+            continue
+    text = "\n".join(chunks)
+    lowered = text.lower()
+    oom_markers = ("out of memory", "oom-kill", "oom_kill", "killed process")
+    oom_detected = any(marker in lowered for marker in oom_markers)
+    worker_failure = "returned non-zero exit status" in lowered or "force terminated" in lowered
+    if oom_detected:
+        failure_kind = "out_of_memory"
+    elif worker_failure:
+        failure_kind = "worker_step_failure"
+    else:
+        failure_kind = "none"
+    return {
+        "format_version": 1,
+        "failure_kind": failure_kind,
+        "oom_detected": oom_detected,
+        "worker_step_failure_detected": worker_failure,
+    }
+
+
 def _validate_spectrum(retrieved) -> None:
     """Check that the compact spectrum is non-empty, tabular, and finite."""
     rows = 0
@@ -43,7 +73,7 @@ def _validate_spectrum(retrieved) -> None:
 
 
 class GroundStateParser(Parser):
-    """Store compact GS metadata and its durable checkpoint in AiiDA."""
+    """Store a sector scan or a durable GS checkpoint with compact metadata."""
 
     def parse(self, **kwargs):
         try:
@@ -51,7 +81,8 @@ class GroundStateParser(Parser):
         except (AttributeError, KeyError):
             return self.exit_codes.ERROR_MISSING_RETRIEVED
         names = set(retrieved.base.repository.list_object_names())
-        if "gs_checkpoint.jld2" not in names:
+        scan_only = self.node.inputs.scan_only.value
+        if not scan_only and "gs_checkpoint.jld2" not in names:
             return self.exit_codes.ERROR_MISSING_CHECKPOINT
         if "gs_status.json" not in names or "gs_summary.txt" not in names:
             return self.exit_codes.ERROR_MISSING_STATUS
@@ -59,22 +90,35 @@ class GroundStateParser(Parser):
             status = _read_json(retrieved, "gs_status.json")
             if status.get("format_version") != 1 or status.get("state") != "complete":
                 raise ValueError("invalid GS status")
+            if status.get("scan_only", False) is not scan_only:
+                raise ValueError("GS scan mode differs from input")
             expected = self.node.inputs.parameters.get_dict()
             if status.get("length") != expected.get("length"):
                 raise ValueError("GS length differs from input")
             if "model" in expected and status.get("model") != expected["model"]:
                 raise ValueError("GS model differs from input")
-            validate_ground_state_energy_window(status)
-            ground_states = status.get("ground_states")
-            total_tasks = status.get("total_tasks")
+            ground_energy = status.get("ground_energy_meV")
             if (
-                isinstance(ground_states, bool)
-                or not isinstance(ground_states, int)
-                or ground_states < 1
+                isinstance(ground_energy, bool)
+                or not isinstance(ground_energy, (int, float))
+                or not math.isfinite(ground_energy)
             ):
-                raise ValueError("invalid GS ground-state count")
-            if total_tasks != 3 * status["length"] * ground_states:
-                raise ValueError("invalid GS spectral task count")
+                raise ValueError("invalid GS energy")
+            if scan_only:
+                if status.get("ground_states") != 1 or status.get("total_tasks") != 0:
+                    raise ValueError("invalid sector-scan dimensions")
+            else:
+                validate_ground_state_energy_window(status)
+                ground_states = status.get("ground_states")
+                total_tasks = status.get("total_tasks")
+                if (
+                    isinstance(ground_states, bool)
+                    or not isinstance(ground_states, int)
+                    or ground_states < 1
+                ):
+                    raise ValueError("invalid GS ground-state count")
+                if total_tasks != 3 * status["length"] * ground_states:
+                    raise ValueError("invalid GS spectral task count")
         except (
             OSError,
             UnicodeError,
@@ -84,11 +128,12 @@ class GroundStateParser(Parser):
         ):
             return self.exit_codes.ERROR_INVALID_STATUS
 
-        with retrieved.base.repository.open("gs_checkpoint.jld2", mode="rb") as handle:
-            self.out(
-                "ground_state",
-                orm.SinglefileData(file=handle, filename="gs_checkpoint.jld2"),
-            )
+        if not scan_only:
+            with retrieved.base.repository.open("gs_checkpoint.jld2", mode="rb") as handle:
+                self.out(
+                    "ground_state",
+                    orm.SinglefileData(file=handle, filename="gs_checkpoint.jld2"),
+                )
         with retrieved.base.repository.open("gs_summary.txt", mode="rb") as handle:
             self.out(
                 "ground_state_summary",
@@ -108,6 +153,7 @@ class SpectralSegmentParser(Parser):
             return self.exit_codes.ERROR_MISSING_RETRIEVED
 
         names = set(retrieved.base.repository.list_object_names())
+        self.out("segment_diagnostics", orm.Dict(dict=_segment_diagnostics(retrieved, names)))
         if "segment_status.json" not in names:
             return self.exit_codes.ERROR_MISSING_STATUS
         if "segment_summary.json" not in names:
@@ -146,4 +192,30 @@ class SpectralSegmentParser(Parser):
                     f"compact_result/{filename}", mode="rb"
                 ) as handle:
                     self.out(label, orm.SinglefileData(file=handle, filename=filename))
+        return None
+
+
+class SpectralInventoryParser(Parser):
+    """Parse a provenance-recorded inventory of an immutable restart folder."""
+
+    def parse(self, **kwargs):
+        try:
+            retrieved = self.retrieved
+        except (AttributeError, KeyError):
+            return self.exit_codes.ERROR_MISSING_RETRIEVED
+        names = set(retrieved.base.repository.list_object_names())
+        if not {"inventory_status.json", "inventory_summary.json"}.issubset(names):
+            return self.exit_codes.ERROR_MISSING_STATUS
+        try:
+            status = validate_segment_status(
+                _read_json(retrieved, "inventory_status.json"),
+                self.node.inputs.parameters.get_dict(),
+            )
+            summary = _read_json(retrieved, "inventory_summary.json")
+            if summary.get("format_version") != 1 or summary.get("phase") != "inventory":
+                raise ValueError("invalid inventory summary")
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError, ContractError):
+            return self.exit_codes.ERROR_INVALID_STATUS
+        self.out("segment_status", orm.Dict(dict=status))
+        self.out("inventory_summary", orm.Dict(dict=summary))
         return None

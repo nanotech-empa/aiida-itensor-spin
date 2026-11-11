@@ -1,0 +1,32 @@
+{
+  "verified_at_UTC": "2026-10-08T11:40:47.647588+00:00",
+  "user_decision": "Terminate current L101 permanently; L50 must continue.",
+  "l101_terminal_processes": [
+    {
+      "uuid": "442684f2-65b4-486b-8fbd-f9fdd31669a0",
+      "process_state": "killed",
+      "status": "Killed through `verdi process kill`"
+    },
+    {
+      "uuid": "bfa71143-b8c7-4638-8d50-35dded5d24de",
+      "process_state": "killed",
+      "status": "Killed through `verdi process kill`"
+    },
+    {
+      "uuid": "a3a4ab9e-2668-4349-bde9-ed2fef0a3916",
+      "process_state": "killed",
+      "status": "Killed through `verdi process kill`"
+    }
+  ],
+  "l50": {
+    "uuid": "5137eda4-09ef-4c0c-a1e6-b3a92f01f4a3",
+    "process_state": "ProcessState.WAITING",
+    "paused": false,
+    "current_segment_uuid": "276c68d7-197b-47ba-89c5-562e66e76c9d",
+    "scheduler_job": "5003236",
+    "scheduler_state": "running"
+  },
+  "checkpoint_preservation": "All prior scientific checkpoints and compact archived moments preserved. No AiiDA scientific data deleted or modified.",
+  "future_continuation": "Current processes are terminal. A new continuation requires a new explicit user request and supported inputs from immutable preserved RemoteData.",
+  "preserved_remote_data_uuid": "9058e3b7-9381-4cb4-979d-1b9f6aefc819"
+}

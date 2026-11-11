@@ -44,10 +44,18 @@ threading_mode in ("outer", "blocksparse") ||
 reference_filename = get(options, "--reference", "")
 reference_tolerance =
     parse(Float64, get(options, "--reference-tolerance", "1e-10"))
+spectral_cutoff_override =
+    haskey(options, "--spectral-cutoff") ?
+    parse(Float64, options["--spectral-cutoff"]) : nothing
+spectral_cutoff_override === nothing || spectral_cutoff_override > 0 ||
+    error("--spectral-cutoff must be positive")
 mkpath(output_dir)
 
 checkpoint_hash = bytes2hex(open(sha256, checkpoint_filename))
 checkpoint = load(checkpoint_filename)
+checkpoint_cutoff = get(checkpoint, "spectral_cutoff", checkpoint["cutoff"])
+spectral_cutoff = spectral_cutoff_override === nothing ?
+    checkpoint_cutoff : spectral_cutoff_override
 L = checkpoint["L"]
 length(checkpoint["sites"]) == L ||
     error("Checkpoint inconsistency: L=$L but length(sites) differs")
@@ -83,6 +91,9 @@ for filename in task_files
         error("Unexpected threading mode in $filename: $(data["threading_mode"])")
     data["checkpoint_hash"] == checkpoint_hash ||
         error("Checkpoint hash mismatch in $filename")
+    task_cutoff = get(data, "spectral_cutoff", checkpoint_cutoff)
+    task_cutoff == spectral_cutoff ||
+        error("Spectral-cutoff mismatch in $filename: $task_cutoff")
     data["L"] == L || error("L mismatch in $filename")
     data["nstates"] == nstates || error("State-count mismatch in $filename")
 
@@ -110,6 +121,7 @@ for filename in task_files
             error("Frequency grid differs in $filename")
     end
     spectra[key] = spectrum
+    compression = get(data, "compression_diagnostics", Dict{String,Any}())
     push!(
         task_rows,
         (
@@ -123,6 +135,12 @@ for filename in task_files
             threading_mode=data["threading_mode"],
             seconds=data["task_seconds"],
             file=filename,
+            max_bond_dimension=get(data, "max_bond_dimension", 0),
+            compression_measurement=get(compression, "measurement", "not_measured"),
+            cap_reached_bonds=get(compression, "cap_reached_bonds", 0),
+            cutoff_exceeded_bonds=get(compression, "cutoff_exceeded_bonds", 0),
+            max_discarded_weight=get(compression, "max_discarded_weight", 0.0),
+            compression_diagnostics=compression,
         ),
     )
 end
@@ -176,6 +194,7 @@ jldsave(
     seed,
     checkpoint_filename,
     checkpoint_hash,
+    spectral_cutoff,
     task_rows,
     backend,
     threading_mode,
@@ -200,14 +219,15 @@ end
 
 sort!(task_rows; by=row -> row.task_id)
 open(joinpath(output_dir, "task_timings.tsv"), "w") do io
-    write(io, "task\tstate\tsite\tchannel\tweight\tworker\tthreads\tthreading_mode\tseconds\tfile\n")
+    write(io, "task\tstate\tsite\tchannel\tweight\tworker\tthreads\tthreading_mode\tseconds\tfile\tmax_bond_dimension\tcompression_measurement\tcap_reached_bonds\tcutoff_exceeded_bonds\tmax_discarded_weight\n")
     for row in task_rows
         write(
             io,
             "$(row.task_id)\t$(row.state)\t$(row.site)\t$(row.channel)\t" *
             "$(row.weight)\t$(row.worker)\t$(row.threads)\t$(row.threading_mode)\t" *
             "$(row.seconds)\t" *
-            "$(row.file)\n",
+            "$(row.file)\t$(row.max_bond_dimension)\t$(row.compression_measurement)\t" *
+            "$(row.cap_reached_bonds)\t$(row.cutoff_exceeded_bonds)\t$(row.max_discarded_weight)\n",
         )
     end
 end
@@ -249,6 +269,16 @@ open(joinpath(output_dir, "collection_report.txt"), "w") do io
     write(io, "collected tasks = $(length(task_files))\n")
     write(io, "checkpoint = $checkpoint_filename\n")
     write(io, "checkpoint sha256 = $checkpoint_hash\n")
+    write(io, "spectral cutoff = $spectral_cutoff\n")
+    write(io, "\n# Bond-dimension diagnostics (discarded weight is not final-spectrum convergence):\n")
+    write(io, "Uncapped/legacy tasks retain their original policy and may have no measured discarded weights.\n")
+    for row in task_rows
+        row.max_bond_dimension > 0 || continue
+        write(io, "task=$(row.task_id) state=$(row.state) site=$(row.site) channel=$(row.channel) " *
+            "max_bond_dimension=$(row.max_bond_dimension) cap_reached_bonds=$(row.cap_reached_bonds) " *
+            "cutoff_exceeded_bonds=$(row.cutoff_exceeded_bonds) max_discarded_weight=$(row.max_discarded_weight)\n")
+        write(io, "compression_diagnostics=$(row.compression_diagnostics)\n")
+    end
     if reference_max_abs_difference !== nothing
         write(io, "reference = $reference_filename\n")
         write(

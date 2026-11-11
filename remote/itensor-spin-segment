@@ -201,6 +201,124 @@ def progress_information(julia, case_root, checkpoint, worker_root):
     return values
 
 
+def publish_status(
+    config,
+    parameters,
+    length,
+    states,
+    segment_index,
+    layout,
+    imported,
+    assignment,
+    started,
+    phase,
+    julia,
+    case_root,
+    checkpoint,
+    worker_root,
+):
+    """Atomically publish current progress while the worker step is still active."""
+    progress = progress_information(julia, case_root, checkpoint, worker_root)
+    if progress[0] != 3 * length * states:
+        fail("progress helper and checkpoint disagree on total task count")
+    atomic_json(
+        Path(config["status_file"]),
+        status_payload(parameters, length, states, progress, segment_index),
+    )
+    atomic_json(
+        Path(config["summary_file"]),
+        summary_payload(segment_index, layout, imported, assignment, started, phase),
+    )
+    return progress
+
+
+def run_workers_with_monitor(
+    command,
+    environment,
+    monitor_interval,
+    config,
+    parameters,
+    length,
+    states,
+    segment_index,
+    layout,
+    imported,
+    assignment,
+    started,
+    julia,
+    case_root,
+    checkpoint,
+    worker_root,
+):
+    """Run srun and keep restart accounting current even if Slurm kills the step."""
+    process = subprocess.Popen(command, env=environment, universal_newlines=True)
+    while True:
+        return_code = process.poll()
+        try:
+            publish_status(
+                config,
+                parameters,
+                length,
+                states,
+                segment_index,
+                layout,
+                imported,
+                assignment,
+                started,
+                "running" if return_code is None else "worker-step-finished",
+                julia,
+                case_root,
+                checkpoint,
+                worker_root,
+            )
+        except Exception as exception:
+            print(
+                f"itensor-spin-segment: progress monitor warning: {exception}",
+                file=sys.stderr,
+                flush=True,
+            )
+        if return_code is not None:
+            break
+        time.sleep(monitor_interval)
+    if return_code != 0:
+        raise subprocess.CalledProcessError(return_code, command)
+
+
+def inspect_restart_state(config_path):
+    """Inventory an immutable parent RemoteData folder without launching workers."""
+    started = time.time()
+    config = json.loads(Path(config_path).read_text())
+    if config.get("format_version") != 1:
+        fail("unsupported inventory input format")
+    parameters = config["parameters"]
+    case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))
+    julia = Path(os.environ.get("ITENSOR_SPIN_JULIA", DEFAULT_JULIA))
+    checkpoint = Path(config["ground_state"]).resolve()
+    checkpoint.is_file() or fail(f"ground-state checkpoint is unreadable: {checkpoint}")
+    worker_root = Path(config["resume_state"]) / "workers"
+    worker_root.is_dir() or fail(f"restart worker state is unreadable: {worker_root}")
+    length, states, total_tasks = checkpoint_information(julia, case_root, checkpoint)
+    progress = progress_information(julia, case_root, checkpoint, worker_root)
+    if progress[0] != total_tasks:
+        fail("progress helper and checkpoint disagree on total task count")
+    atomic_json(
+        Path(config["status_file"]),
+        status_payload(parameters, length, states, progress, config["segment_index"]),
+    )
+    atomic_json(
+        Path(config["summary_file"]),
+        {
+            "format_version": 1,
+            "segment_index": config["segment_index"],
+            "elapsed_seconds": time.time() - started,
+            "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+            "phase": "inventory",
+            "source_worker_root": str(worker_root),
+        },
+    )
+    return 0
+
+
 def status_payload(parameters, length, states, progress, segment_index):
     total_tasks, completed_tasks, progress_units, progress_units_total, recurrence_target = progress
     return {
@@ -235,8 +353,10 @@ def summary_payload(segment_index, layout, imported, assignment, started, phase)
 
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--inspect":
+        return inspect_restart_state(sys.argv[2])
     if len(sys.argv) != 2:
-        fail("usage: itensor-spin-segment segment.json")
+        fail("usage: itensor-spin-segment segment.json | --inspect inventory.json")
     started = time.time()
     config = json.loads(Path(sys.argv[1]).read_text())
     if config.get("format_version") != 1:
@@ -324,6 +444,16 @@ def main():
     threading_mode = parameters["threading_mode"]
     checkpoint_every = integer(parameters, "checkpoint_every", 1)
     heartbeat_every = integer(parameters, "heartbeat_every", 1)
+    max_bond_dimension = integer({"max_bond_dimension": parameters.get("max_bond_dimension", 0)}, "max_bond_dimension")
+    spectral_cutoff = parameters.get("spectral_cutoff")
+    if spectral_cutoff is not None:
+        if (
+            isinstance(spectral_cutoff, bool)
+            or not isinstance(spectral_cutoff, (int, float))
+            or spectral_cutoff <= 0
+        ):
+            fail("spectral_cutoff must be a positive number")
+        spectral_cutoff = float(spectral_cutoff)
     stop_after_n = int(layout.get("stop_after_n", 0))
     environment = os.environ.copy()
     environment.update(
@@ -337,30 +467,48 @@ def main():
             "ITENSOR_SPIN_CHECKPOINT_EVERY": str(checkpoint_every),
             "ITENSOR_SPIN_HEARTBEAT_EVERY": str(heartbeat_every),
             "ITENSOR_SPIN_MANIFEST_ROOT": str(manifest_root.resolve()),
+            "ITENSOR_SPIN_MAX_BOND_DIMENSION": str(max_bond_dimension),
         }
     )
+    if spectral_cutoff is not None:
+        environment["ITENSOR_SPIN_SPECTRAL_CUTOFF"] = str(spectral_cutoff)
     if initial_progress[1] < total_tasks:
-        run(
-            [
-                "srun",
-                "--exclusive",
-                "--exact",
-                f"--nodes={nodes}",
-                f"--ntasks={workers}",
-                f"--ntasks-per-node={processes_per_node}",
-                f"--cpus-per-task={threads}",
-                "--cpu-bind=cores",
-                "--distribution=block:block",
-                f"--output={worker_root}/worker_%t/stdout.txt",
-                f"--error={worker_root}/worker_%t/stderr.txt",
-                str(case_root / "run_segment_rank.sh"),
-                str(checkpoint),
-                str(worker_root),
-                str(case_root),
-                backend,
-                threading_mode,
-            ],
-            env=environment,
+        worker_command = [
+            "srun",
+            "--exclusive",
+            "--exact",
+            f"--nodes={nodes}",
+            f"--ntasks={workers}",
+            f"--ntasks-per-node={processes_per_node}",
+            f"--cpus-per-task={threads}",
+            "--cpu-bind=cores",
+            "--distribution=block:block",
+            f"--output={worker_root}/worker_%t/stdout.txt",
+            f"--error={worker_root}/worker_%t/stderr.txt",
+            str(case_root / "run_segment_rank.sh"),
+            str(checkpoint),
+            str(worker_root),
+            str(case_root),
+            backend,
+            threading_mode,
+        ]
+        run_workers_with_monitor(
+            worker_command,
+            environment,
+            60,
+            config,
+            parameters,
+            length,
+            states,
+            segment_index,
+            layout,
+            imported,
+            assignment_summary,
+            started,
+            julia,
+            case_root,
+            checkpoint,
+            worker_root,
         )
 
     (
@@ -375,35 +523,36 @@ def main():
     complete = completed_tasks == total_tasks
 
     if complete:
-        run(
-            [
-                "srun",
-                "--exclusive",
-                "--exact",
-                "--nodes=1",
-                "--ntasks=1",
-                "--cpus-per-task=1",
-                "--cpu-bind=cores",
-                "env",
-                "JULIA_NUM_THREADS=1,0",
-                str(julia),
-                "--startup-file=no",
-                f"--project={case_root / 'ITensor_env'}",
-                str(case_root / "collect_tasks.jl"),
-                "--input-root",
-                str(worker_root),
-                "--output",
-                str(merged_root),
-                "--checkpoint",
-                str(checkpoint),
-                "--backend",
-                backend,
-                "--threading-mode",
-                threading_mode,
-                "--reference-tolerance",
-                "1e-10",
-            ]
-        )
+        collector_command = [
+            "srun",
+            "--exclusive",
+            "--exact",
+            "--nodes=1",
+            "--ntasks=1",
+            "--cpus-per-task=1",
+            "--cpu-bind=cores",
+            "env",
+            "JULIA_NUM_THREADS=1,0",
+            str(julia),
+            "--startup-file=no",
+            f"--project={case_root / 'ITensor_env'}",
+            str(case_root / "collect_tasks.jl"),
+            "--input-root",
+            str(worker_root),
+            "--output",
+            str(merged_root),
+            "--checkpoint",
+            str(checkpoint),
+            "--backend",
+            backend,
+            "--threading-mode",
+            threading_mode,
+            "--reference-tolerance",
+            "1e-10",
+        ]
+        if spectral_cutoff is not None:
+            collector_command.extend(["--spectral-cutoff", str(spectral_cutoff)])
+        run(collector_command)
         for filename in ("spectrum.tsv", "collection_report.txt", "task_timings.tsv"):
             source = merged_root / filename
             source.is_file() or fail(f"collector did not create {filename}")

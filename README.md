@@ -6,6 +6,12 @@ Adaptation of the spin-chain ITensor code developed by
 Experimental, restart-safe AiiDA orchestration for the Julia/ITensor spin-chain
 spectral calculation on Daint/ALPS.
 
+An optional spectral MPS bond cap is described in
+[`docs/spectral-bond-cap.md`](docs/spectral-bond-cap.md). It preserves the
+requested truncation cutoff but reports when the dimension limit forces larger
+discarded weights; existing completed tasks and checkpoint policy history are
+preserved during a supported continuation.
+
 ## Experimental mixed-spin model
 
 A separate model adapter, `mixed_spin_heisenberg_chain_v1`, generalizes the
@@ -68,6 +74,47 @@ ground-state checkpoint and, when necessary, the immutable state of the
 preceding segment. A valid `checkpointed` result triggers the next submission
 automatically. The workflow can also make a bounded continuation from preserved
 remote state when an execution ends unexpectedly.
+
+
+## Sector ensembles
+
+The 'itensor_spin.sector_ensemble' entry point accepts explicit integer 2Sz
+labels for the generic mixed-spin model and runs two provenance-preserving
+stages:
+
+1. one lightweight, one-node DMRG lowest-energy scan for every requested
+   sector, without the highest-energy solve or Chebyshev checkpoint;
+2. complete restartable SpinChainWorkChain spectra only for sectors whose
+   lowest energy lies within max(k_B*T/5, energy_precision_meV) of the global
+   minimum.
+
+This separation is intentional. The present spectral kernel represents
+nonnegative-frequency response from a ground-state manifold; treating arbitrary
+higher-energy fixed-Sz states as independent ground states would omit
+downward/negative-frequency transitions. Every requested scan is retained in
+sector_scan_metadata and sector_scan_summaries. The spectral_sector_plan
+CalcFunction records the global energy, tolerance, selected sectors, and reason.
+Full outputs are namespaced only for selected sectors, while sector_summary
+reports scan and spectrum state for all sectors.
+
+max_total_nodes is the global ceiling for either stage.
+max_concurrent_sectors caps fan-out. Scans need one node each; selected spectral
+WorkChains additionally respect spectral_resources.max_nodes per sector. The
+planner derives separate scan and spectral concurrency values so neither stage
+can exceed the global ceiling.
+
+The localhost acceptance WorkChain 48668d60-4f04-4a35-bf8b-ba344d14f720
+(PK 12316) scanned every sector of the antiferromagnetic spin-1/2 L=3 chain:
+E0=-1.0 meV for 2Sz=-1,+1 and E0=+0.5 meV for 2Sz=-3,+3. It selected only
+2Sz=-1,+1, completed all 9/9 spectral tasks for each, and returned 420 spectrum
+rows per sector in 3 min 8 s parent-workflow elapsed time. Spin-inversion partners had identical frequency grids and a
+maximum absolute spectral difference of 2.469136006766348e-13. The submission
+example is
+[examples/submit_mixed_l3_sector_ensemble_localhost.py](examples/submit_mixed_l3_sector_ensemble_localhost.py).
+
+The production workflow uses DMRG/MPS state preparation and Chebyshev-MPS
+spectral propagation. Exact diagonalization remains confined to independent
+small-chain validation scripts.
 
 ## Scientific correction and validation
 
@@ -232,6 +279,28 @@ time, and partition. Inspect any linked Dict with, for example:
 verdi data core.dict show PK
 ```
 
+
+## AiiDA 2.8 restart approval and OOM backoff
+
+New submissions use `AdaptiveSpinSpectraWorkChain`, a subclass of
+`aiida.engine.BaseRestartWorkChain`. Each segment parser publishes structured
+failure diagnostics. When Slurm reports an out-of-memory failure, a provenance-
+recorded CalcFunction reduces the process packing deterministically
+(`12 -> 8 -> 6 -> 4 -> 3 -> 2 -> 1` processes/node), derives the next plan from
+the latest checkpoint state, and pauses before submitting it. The user can
+inspect the proposed plan and choose:
+
+```console
+verdi process report WORKCHAIN_PK
+verdi process play WORKCHAIN_PK
+verdi process kill WORKCHAIN_PK
+```
+
+`play` approves the already recorded plan; it does not mutate process inputs.
+Unknown failures default to AiiDA's `on_unhandled_failure="pause"`, and reaching
+the iteration ceiling uses `pause_on_max_iterations=True`. Normal graceful
+walltime checkpoints continue automatically without user intervention.
+
 ## Physics model interface
 
 The registered Gonçalo model exposes `length`, `impurity_site`, `J`,
@@ -250,3 +319,34 @@ workflow.
 Earlier WorkChains and Daint files using the old `2N`-slot convention are
 retained for provenance and debugging only. Their last moment was an untouched
 zero, so they are not scientific references for v2.
+
+## Explicit spin-graph model (development)
+
+`mixed_spin_heisenberg_graph_v1` takes `site_spins` plus `exchange_edges`, each an
+object with one-based `i`, `j`, and finite `J_meV`. Optional `site_positions` preserve
+the drawing independently of Hamiltonian construction. Connections are undirected,
+canonicalized and sorted; self connections and repeated pairs are rejected.
+Mixed integer/half-integer spins, branches, loops and non-neighbour exchanges are
+supported by the isotropic H = Σ J_ij S_i·S_j adapter. Positive J is antiferromagnetic.
+The site order is explicit and fixed, with no heuristic reordering in this version.
+
+Graph inputs require an isolated ground-state Code declaring `supports_spin_graph`.
+The existing chain and impurity adapters retain their input contracts. The graph
+adapter reuses the conserved-Sz and total-S² machinery for isotropic exchange;
+it makes no reflection or bipartite-graph assumption. General graphs may require
+more bond dimension and convergence checks than chains. No production code,
+checkpoint, deployment, installed package or daemon was changed for this preview.
+
+`validation/check_spin_graph.py` generates independent dense reference spectra.
+`validation/test_spin_graph.jl` checks graph MPO eigenvalues and DMRG ground energies
+for a triangle, mixed-spin branch, longer-range graph and dimer.
+`validation/compare_graph_spectrum.py` exercises the standalone ground-state,
+checkpoint, local spectral-worker and collection path on a four-spin graph, then
+compares against independent exact poles reconstructed using the inherited
+Chebyshev/Jackson convention. It can take a prior test directory as a second
+argument to validate continuation from saved test checkpoints. Keep its internal
+window above the existing 600-second minimum forecast margin.
+
+These are isolated numerical integration checks, not a claim of end-to-end app/
+AiiDA-daemon validation or a production deployment. The active environment is below
+the modern support floor and was deliberately not upgraded while L50 is active.
