@@ -8,7 +8,11 @@ import math
 from aiida import orm
 from aiida.parsers import Parser
 
-from .contracts import ContractError, validate_segment_status
+from .contracts import (
+    ContractError,
+    validate_ground_state_energy_window,
+    validate_segment_status,
+)
 
 
 def _read_json(retrieved, filename: str):
@@ -58,6 +62,9 @@ class GroundStateParser(Parser):
             expected = self.node.inputs.parameters.get_dict()
             if status.get("length") != expected.get("length"):
                 raise ValueError("GS length differs from input")
+            if "model" in expected and status.get("model") != expected["model"]:
+                raise ValueError("GS model differs from input")
+            validate_ground_state_energy_window(status)
             ground_states = status.get("ground_states")
             total_tasks = status.get("total_tasks")
             if (
@@ -68,7 +75,13 @@ class GroundStateParser(Parser):
                 raise ValueError("invalid GS ground-state count")
             if total_tasks != 3 * status["length"] * ground_states:
                 raise ValueError("invalid GS spectral task count")
-        except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            ValueError,
+            ContractError,
+        ):
             return self.exit_codes.ERROR_INVALID_STATUS
 
         with retrieved.base.repository.open("gs_checkpoint.jld2", mode="rb") as handle:

@@ -217,4 +217,11 @@ open(dimensions_filename, "w") do dimensions
     println(dimensions, "$L\t$nGS\t$(3 * L * nGS)")
 end
 
+ground_energy = minimum(En_sym)
+bandwidth = Emax - ground_energy
+energy_window_filename = joinpath(output_dir, "gs_energy_window.txt")
+open(energy_window_filename, "w") do energy_window
+    println(energy_window, "$ground_energy\t$Emax\t$bandwidth")
+end
+
 println("GS checkpoint written to $checkpoint_filename")

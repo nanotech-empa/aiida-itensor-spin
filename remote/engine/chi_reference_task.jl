@@ -110,10 +110,8 @@ checkpoint_hash = bytes2hex(open(sha256, checkpoint_filename))
 checkpoint = load(checkpoint_filename)
 
 required_keys = (
+    "model",
     "L",
-    "i_imp",
-    "J",
-    "Jp",
     "cutoff",
     "ωmax",
     "try_doubleN",

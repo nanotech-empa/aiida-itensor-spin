@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from pathlib import PurePosixPath
 from typing import Any
@@ -13,6 +14,8 @@ ALLOWED_BACKENDS = {"streaming"}
 ALLOWED_THREADING_MODES = {"outer", "blocksparse"}
 MOMENT_CONVENTION = "chebyshev-2n-minus-1-v2"
 MODEL_IDENTIFIER = "spin1_chain_spinhalf_impurity_v1"
+MIXED_MODEL_IDENTIFIER = "mixed_spin_heisenberg_chain_v1"
+REGISTERED_MODELS = {MODEL_IDENTIFIER, MIXED_MODEL_IDENTIFIER}
 
 GROUND_STATE_DEFAULTS = {
     "model": MODEL_IDENTIFIER,
@@ -227,19 +230,59 @@ def add_discovered_task_count(
     return normalized
 
 
-def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate the versioned spin-1 impurity model and numerical controls."""
-    supplied = {**GROUND_STATE_DEFAULTS, **value}
-    model = str(supplied.get("model", "")).strip()
-    if model != MODEL_IDENTIFIER:
+def validate_ground_state_energy_window(
+    ground_state_metadata: Mapping[str, Any],
+) -> dict[str, float] | None:
+    """Validate a post-GS spectral window when energy metadata is available.
+
+    Old checkpoints without these fields remain usable for continuation.
+    Fresh ground-state calculations publish all four values.
+    """
+    keys = {
+        "ground_energy_meV",
+        "highest_energy_meV",
+        "spectral_bandwidth_meV",
+        "omega_max_meV",
+    }
+    present = keys.intersection(ground_state_metadata)
+    if not present:
+        return None
+    if present != keys:
+        missing = sorted(keys - present)
+        raise ContractError(f"ground-state energy metadata is incomplete; missing {missing}")
+
+    values = {}
+    for key in sorted(keys):
+        value = ground_state_metadata[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ContractError(f"{key} must be a finite real number")
+        value = float(value)
+        if not math.isfinite(value):
+            raise ContractError(f"{key} must be a finite real number")
+        values[key] = value
+
+    bandwidth = values["spectral_bandwidth_meV"]
+    if bandwidth <= 0:
+        raise ContractError("spectral_bandwidth_meV must be > 0")
+    derived = values["highest_energy_meV"] - values["ground_energy_meV"]
+    if not math.isclose(bandwidth, derived, rel_tol=1e-10, abs_tol=1e-10):
+        raise ContractError("spectral bandwidth differs from highest minus ground energy")
+    omega_max = values["omega_max_meV"]
+    if omega_max <= 0:
+        raise ContractError("omega_max_meV must be > 0")
+    if omega_max > bandwidth and not math.isclose(
+        omega_max, bandwidth, rel_tol=1e-12, abs_tol=1e-12
+    ):
         raise ContractError(
-            f"model must be {MODEL_IDENTIFIER!r}; other Hamiltonians need a registered model"
+            f"omega_max_meV={omega_max:g} exceeds the GS spectral bandwidth "
+            f"{bandwidth:g} meV"
         )
-    length = _integer(value, "length", minimum=3)
-    impurity_site = _integer(value, "impurity_site", minimum=1)
-    if impurity_site > length:
-        raise ContractError("impurity_site cannot exceed length")
-    seed = _integer(value, "seed", minimum=0)
+    return values
+
+
+def _common_ground_state_parameters(
+    supplied: Mapping[str, Any], value: Mapping[str, Any]
+) -> dict[str, Any]:
     threading_mode = str(supplied.get("threading_mode", "blocksparse")).lower()
     if threading_mode not in ALLOWED_THREADING_MODES:
         raise ContractError(f"threading_mode must be one of {sorted(ALLOWED_THREADING_MODES)}")
@@ -250,14 +293,8 @@ def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any
     if not isinstance(try_double, bool):
         raise ContractError("try_doubleN must be a boolean")
     return {
-        "model": model,
-        "length": length,
-        "impurity_site": impurity_site,
-        "seed": seed,
+        "seed": _integer(value, "seed", minimum=0),
         "threading_mode": threading_mode,
-        "J_meV": _real_float(supplied, "J_meV"),
-        "JL_meV": _real_float(supplied, "JL_meV"),
-        "JR_meV": _real_float(supplied, "JR_meV"),
         "dmrg_cutoff": _positive_float(supplied, "dmrg_cutoff"),
         "spectral_cutoff": _positive_float(supplied, "spectral_cutoff"),
         "energy_precision_meV": _positive_float(supplied, "energy_precision_meV"),
@@ -274,6 +311,80 @@ def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any
         "omega_max_meV": _positive_float(supplied, "omega_max_meV"),
         "omega_smearing_meV": _positive_float(supplied, "omega_smearing_meV"),
         "try_doubleN": try_double,
+    }
+
+
+def _normalize_site_spins(value: Any) -> list[float]:
+    if not isinstance(value, list) or len(value) < 3:
+        raise ContractError("site_spins must be a list containing at least three spins")
+    result = []
+    for index, spin in enumerate(value):
+        if isinstance(spin, bool) or not isinstance(spin, (int, float)) or spin <= 0:
+            raise ContractError(f"site_spins[{index}] must be a positive number")
+        twice_spin = round(2 * float(spin))
+        if abs(2 * float(spin) - twice_spin) > 1e-12:
+            raise ContractError(f"site_spins[{index}] must be integer or half-integer")
+        result.append(twice_spin / 2)
+    return result
+
+
+def _normalize_couplings(value: Any, length: int) -> list[float]:
+    if not isinstance(value, list) or len(value) != length - 1:
+        raise ContractError(
+            "couplings_meV must contain exactly one nearest-neighbour coupling per bond"
+        )
+    result = []
+    for index, coupling in enumerate(value):
+        if isinstance(coupling, bool) or not isinstance(coupling, (int, float)):
+            raise ContractError(f"couplings_meV[{index}] must be a real number")
+        result.append(float(coupling))
+    return result
+
+
+def normalize_ground_state_parameters(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate one registered Hamiltonian model and its numerical controls."""
+    model = str(value.get("model", MODEL_IDENTIFIER)).strip()
+    if model not in REGISTERED_MODELS:
+        raise ContractError(
+            f"model must be one of {sorted(REGISTERED_MODELS)!r}; "
+            "other Hamiltonians need a registered model"
+        )
+    supplied = {**GROUND_STATE_DEFAULTS, **value, "model": model}
+    common = _common_ground_state_parameters(supplied, value)
+
+    if model == MODEL_IDENTIFIER:
+        length = _integer(value, "length", minimum=3)
+        impurity_site = _integer(value, "impurity_site", minimum=1)
+        if impurity_site > length:
+            raise ContractError("impurity_site cannot exceed length")
+        return {
+            "model": model,
+            "length": length,
+            "impurity_site": impurity_site,
+            "J_meV": _real_float(supplied, "J_meV"),
+            "JL_meV": _real_float(supplied, "JL_meV"),
+            "JR_meV": _real_float(supplied, "JR_meV"),
+            **common,
+        }
+
+    site_spins = _normalize_site_spins(value.get("site_spins"))
+    length = len(site_spins)
+    if "length" in value and _integer(value, "length", minimum=3) != length:
+        raise ContractError("length must equal len(site_spins)")
+    couplings = _normalize_couplings(value.get("couplings_meV"), length)
+    twice_spins = [round(2 * spin) for spin in site_spins]
+    target = value.get("target_twice_sz", sum(twice_spins) % 2)
+    if isinstance(target, bool) or not isinstance(target, int):
+        raise ContractError("target_twice_sz must be an integer")
+    if abs(target) > sum(twice_spins) or (target - sum(twice_spins)) % 2:
+        raise ContractError("target_twice_sz is incompatible with the supplied spins")
+    return {
+        "model": model,
+        "length": length,
+        "site_spins": site_spins,
+        "couplings_meV": couplings,
+        "target_twice_sz": target,
+        **common,
     }
 
 

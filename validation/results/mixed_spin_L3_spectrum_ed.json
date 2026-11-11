@@ -1,0 +1,97 @@
+{
+  "case": "three_spin_half_equal_antiferromagnetic",
+  "comparison": "Exact Lehmann pole positions, local S(S+1) sum rule, and finite-window broadened spectral area",
+  "couplings_meV": [
+    1.0,
+    1.0
+  ],
+  "model": "mixed_spin_heisenberg_chain_v1",
+  "omega_max_meV": 1.5,
+  "omega_smearing_meV": 0.05,
+  "passed": true,
+  "site_spins": [
+    0.5,
+    0.5,
+    0.5
+  ],
+  "sites": [
+    {
+      "area_error": 0.010109454453391509,
+      "exact_area_in_closed_frequency_window": 0.5000000000000002,
+      "exact_full_sum_rule": 0.7500000000000002,
+      "exact_poles": [
+        {
+          "combined_exact_weight": 0.3333333333333335,
+          "exact_frequency_meV": 0.0,
+          "frequency_error_meV": 0.0,
+          "observed_peak_frequency_meV": 0.0
+        },
+        {
+          "combined_exact_weight": 0.25000000000000006,
+          "exact_frequency_meV": 1.0,
+          "frequency_error_meV": 0.006711409395973256,
+          "observed_peak_frequency_meV": 1.0067114093959733
+        },
+        {
+          "combined_exact_weight": 0.16666666666666674,
+          "exact_frequency_meV": 1.5,
+          "frequency_error_meV": 0.0,
+          "observed_peak_frequency_meV": 1.5
+        }
+      ],
+      "expected_S_times_S_plus_1": 0.75,
+      "site": 1,
+      "tensor_numerical_area": 0.5101094544533917
+    },
+    {
+      "area_error": 0.01768540315803452,
+      "exact_area_in_closed_frequency_window": 0.37500000000000006,
+      "exact_full_sum_rule": 0.7500000000000001,
+      "exact_poles": [
+        {
+          "combined_exact_weight": 0.0833333333333334,
+          "exact_frequency_meV": 0.0,
+          "frequency_error_meV": 0.0,
+          "observed_peak_frequency_meV": 0.0
+        },
+        {
+          "combined_exact_weight": 0.6666666666666667,
+          "exact_frequency_meV": 1.5,
+          "frequency_error_meV": 0.0,
+          "observed_peak_frequency_meV": 1.5
+        }
+      ],
+      "expected_S_times_S_plus_1": 0.75,
+      "site": 2,
+      "tensor_numerical_area": 0.3926854031580346
+    },
+    {
+      "area_error": 0.010109454453390843,
+      "exact_area_in_closed_frequency_window": 0.5000000000000001,
+      "exact_full_sum_rule": 0.7500000000000002,
+      "exact_poles": [
+        {
+          "combined_exact_weight": 0.3333333333333336,
+          "exact_frequency_meV": 0.0,
+          "frequency_error_meV": 0.0,
+          "observed_peak_frequency_meV": 0.0
+        },
+        {
+          "combined_exact_weight": 0.25,
+          "exact_frequency_meV": 1.0,
+          "frequency_error_meV": 0.006711409395973256,
+          "observed_peak_frequency_meV": 1.0067114093959733
+        },
+        {
+          "combined_exact_weight": 0.16666666666666663,
+          "exact_frequency_meV": 1.5,
+          "frequency_error_meV": 0.0,
+          "observed_peak_frequency_meV": 1.5
+        }
+      ],
+      "expected_S_times_S_plus_1": 0.75,
+      "site": 3,
+      "tensor_numerical_area": 0.510109454453391
+    }
+  ]
+}
