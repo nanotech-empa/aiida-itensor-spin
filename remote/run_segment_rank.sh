@@ -38,7 +38,15 @@ if [[ -n "${SPECTRAL_CUTOFF}" ]]; then
     CUTOFF_ARGS=(--spectral-cutoff "${SPECTRAL_CUTOFF}")
 fi
 
-export JULIA_NUM_THREADS=${THREADS},0
+KERNEL_MODE=${ITENSOR_SPIN_KERNEL_THREADING_MODE:-legacy}
+if [[ "${KERNEL_MODE}" == blas ]]; then
+    [[ "${ITENSOR_SPIN_BLAS_THREADS:?}" == "${THREADS}" ]] || exit 2
+    export JULIA_NUM_THREADS=1,0
+else
+    [[ "${KERNEL_MODE}" == legacy ]] || exit 2
+    export JULIA_NUM_THREADS=${THREADS},0
+fi
+echo "kernel_threading_mode=${KERNEL_MODE}, julia_threads=${JULIA_NUM_THREADS}, blas_threads=${ITENSOR_SPIN_BLAS_THREADS:-1}"
 exec "${JULIA_BIN}" --startup-file=no --project="${ENV_ROOT}" \
     "${CODE_ROOT}/chi_single_task_checkpoint.jl" \
     --checkpoint "${CHECKPOINT}" \

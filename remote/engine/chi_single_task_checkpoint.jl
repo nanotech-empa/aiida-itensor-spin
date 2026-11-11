@@ -18,6 +18,7 @@ using ITensorMPS
 const CASE_ROOT = @__DIR__
 include(joinpath(CASE_ROOT, "ITensor_libs", "Imports.jl"))
 include(joinpath(CASE_ROOT, "SpectralFunctionCheckpointed.jl"))
+include(joinpath(CASE_ROOT, "KernelThreading.jl"))
 
 const CHANNELS = ("zz", "pm", "mp")
 const CHANNEL_WEIGHTS = Dict("zz" => 1.0, "pm" => 0.5, "mp" => 0.5)
@@ -130,11 +131,7 @@ heartbeat_every >= 1 || error("--heartbeat-every must be >= 1")
     error("Require 0 <= worker-rank < worker-count")
 Threads.nthreads(:interactive) == 0 ||
     error("Use JULIA_NUM_THREADS=<threads>,0: interactive thread pool must be zero")
-BLAS.set_num_threads(1)
-if threading_mode == "blocksparse"
-    ITensors.Strided.disable_threads()
-    ITensors.enable_threaded_blocksparse()
-end
+kernel_threading_mode = KernelThreading.configure_kernel_threading(threading_mode)
 strided_threads = ITensors.Strided.get_num_threads()
 threaded_blocksparse = ITensors.using_threaded_blocksparse()
 mkpath(output_dir)
@@ -202,7 +199,8 @@ println(
     "rank=$worker_rank/$worker_count host=$(gethostname()) " *
     "threads=$(Threads.nthreads()) tasks=$(length(assigned_tasks)) " *
     "L=$L states=$nstates backend=$backend threading_mode=$threading_mode " *
-    "blocksparse=$threaded_blocksparse strided_threads=$strided_threads",
+    "blocksparse=$threaded_blocksparse strided_threads=$strided_threads " *
+    "kernel_threading_mode=$kernel_threading_mode blas_threads=$(BLAS.get_num_threads())",
 )
 println("task IDs = $([task.task_id for task in assigned_tasks])")
 println("GS checkpoint = $checkpoint_filename")
@@ -329,6 +327,8 @@ function process_task(local_index)
             threading_mode,
             moment_convention=MOMENT_CONVENTION,
             threaded_blocksparse,
+            kernel_threading_mode,
+            blas_threads=BLAS.get_num_threads(),
             strided_threads,
             checkpoint_filename,
             checkpoint_hash,
@@ -381,6 +381,8 @@ open(summary_filename, "w") do io
     write(io, "backend = $backend\n")
     write(io, "threading mode = $threading_mode\n")
     write(io, "moment convention = $MOMENT_CONVENTION\n")
+    write(io, "kernel threading mode = $kernel_threading_mode\n")
+    write(io, "BLAS threads = $(BLAS.get_num_threads())\n")
     write(io, "threaded blocksparse = $threaded_blocksparse\n")
     write(io, "strided threads = $strided_threads\n")
     write(io, "worker rank = $worker_rank\n")

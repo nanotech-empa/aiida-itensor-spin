@@ -366,6 +366,12 @@ def main():
     nodes = integer(layout, "nodes", 1)
     processes_per_node = integer(layout, "processes_per_node", 1)
     threads = integer(layout, "threads_per_process", 1)
+    kernel_mode = parameters.get("kernel_threading_mode", "legacy")
+    if kernel_mode not in {"legacy", "blas"}:
+        fail("unsupported kernel_threading_mode")
+    blas_threads = integer(parameters, "blas_threads", 1) if kernel_mode == "blas" else 1
+    if kernel_mode == "blas" and (blas_threads != threads or parameters["threading_mode"] != "blocksparse"):
+        fail("BLAS policy requires matching allocated cores and blocksparse checkpoint compatibility")
     internal_stop_seconds = integer(layout, "internal_stop_seconds", 1)
     workers = integer(config, "workers", 1)
     allocation_capacity = nodes * processes_per_node
@@ -468,6 +474,8 @@ def main():
             "ITENSOR_SPIN_HEARTBEAT_EVERY": str(heartbeat_every),
             "ITENSOR_SPIN_MANIFEST_ROOT": str(manifest_root.resolve()),
             "ITENSOR_SPIN_MAX_BOND_DIMENSION": str(max_bond_dimension),
+            "ITENSOR_SPIN_KERNEL_THREADING_MODE": kernel_mode,
+            "ITENSOR_SPIN_BLAS_THREADS": str(blas_threads),
         }
     )
     if spectral_cutoff is not None:

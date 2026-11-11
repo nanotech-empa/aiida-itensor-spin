@@ -118,6 +118,11 @@ class SpectralSegmentCalculation(CalcJob):
         ):
             raise ValueError("Selected Code does not declare spectral bond-cap support; use the updated engine")
         layout = normalize_layout(plan["selected_layout"])
+        if parameters.get("kernel_threading_mode") == "blas":
+            if not self.inputs.code.base.extras.get("supports_blas_execution_policy", False):
+                raise ValueError("Selected Code does not support the BLAS execution policy")
+            if parameters["blas_threads"] != layout["threads_per_process"]:
+                raise ValueError("BLAS threads must match allocated cores per process")
         workers = plan.get("workers")
         capacity = layout["nodes"] * layout["processes_per_node"]
         if (

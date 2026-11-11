@@ -79,8 +79,12 @@ def derive_resource_plan(
             "reason": (
                 "maximum useful worker count within the supplied ceilings, packed at "
                 "the allowed processes-per-node capacity with a partially occupied "
-                "final node when needed; threads per process are capped at 2 based "
-                "on the validated CPU scaling benchmark"
+                "final node when needed; "
+                + (
+                    "explicit threads per process recorded in resource_limits"
+                    if "threads_per_process" in limits
+                    else "threads per process are capped at 2 based on the validated CPU scaling benchmark"
+                )
             ),
             "length": metadata["length"],
             "ground_states": metadata["ground_states"],
