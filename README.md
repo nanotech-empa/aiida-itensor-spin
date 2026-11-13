@@ -350,3 +350,25 @@ window above the existing 600-second minimum forecast margin.
 These are isolated numerical integration checks, not a claim of end-to-end app/
 AiiDA-daemon validation or a production deployment. The active environment is below
 the modern support floor and was deliberately not upgraded while L50 is active.
+
+## Software attribution and scientific acknowledgements
+
+Please credit [aiida-itensor-spin](https://github.com/nanotech-empa/aiida-itensor-spin) and its
+[contributors](https://github.com/nanotech-empa/aiida-itensor-spin/graphs/contributors),
+and identify the release or immutable commit used. Existing author,
+contributor and funding acknowledgements remain authoritative.
+
+This revision has no top-level licence file. Preserve existing source
+notices and confirm applicable reuse terms with the maintainers; this
+citation guidance does not supply a licence.
+
+When this software's AiiDA workflows or provenance helped the research,
+acknowledge the [AiiDA team and cite its three papers](https://github.com/nanotech-empa/.github/blob/main/CITATION_GUIDANCE.md#aiida).
+Also acknowledge [AiiDAlab and its two platform papers](https://github.com/nanotech-empa/.github/blob/main/CITATION_GUIDANCE.md#aiidalab)
+when AiiDAlab was used to access those workflows.
+
+The adapted spin-chain implementation retains the credit to [Gonçalo Catarina (@GCatarina)](https://github.com/GCatarina) above. Credit that implementation separately from the AiiDA orchestration and follow the citation instructions for the Julia/ITensor libraries and DMRG or spectral methods actually used.
+
+The [shared credit guide](https://github.com/nanotech-empa/.github/blob/main/CITATION_GUIDANCE.md) keeps software attribution, licence
+compliance and scientific citation requests separate. Scientific citation
+requests are not additional MIT licence conditions.
