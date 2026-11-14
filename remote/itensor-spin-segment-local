@@ -269,6 +269,42 @@ def progress_information(julia, case_root, checkpoint, worker_root):
     return values
 
 
+def inspect_restart_state(config_path):
+    """Inventory an immutable parent folder without launching local workers."""
+    started = time.time()
+    config = json.loads(Path(config_path).read_text())
+    if config.get("format_version") != 1:
+        fail("unsupported inventory input format")
+    parameters = config["parameters"]
+    case_root = Path(os.environ.get("ITENSOR_SPIN_CASE_ROOT", DEFAULT_CASE_ROOT))
+    julia = Path(os.environ.get("ITENSOR_SPIN_JULIA", DEFAULT_JULIA))
+    checkpoint = Path(config["ground_state"]).resolve()
+    checkpoint.is_file() or fail(f"ground-state checkpoint is unreadable: {checkpoint}")
+    worker_root = Path(config["resume_state"]) / "workers"
+    worker_root.is_dir() or fail(f"restart worker state is unreadable: {worker_root}")
+    length, states, total_tasks = checkpoint_information(julia, case_root, checkpoint)
+    progress = progress_information(julia, case_root, checkpoint, worker_root)
+    if progress[0] != total_tasks:
+        fail("progress helper and checkpoint disagree on total task count")
+    atomic_json(
+        Path(config["status_file"]),
+        status_payload(parameters, length, states, progress, config["segment_index"]),
+    )
+    atomic_json(
+        Path(config["summary_file"]),
+        {
+            "format_version": 1,
+            "segment_index": config["segment_index"],
+            "elapsed_seconds": time.time() - started,
+            "execution_environment": "localhost-direct",
+            "hostname": os.uname().nodename,
+            "phase": "inventory",
+            "source_worker_root": str(worker_root),
+        },
+    )
+    return 0
+
+
 def status_payload(parameters, length, states, progress, segment_index):
     total_tasks, completed_tasks, progress_units, progress_units_total, recurrence_target = progress
     return {
@@ -304,8 +340,10 @@ def summary_payload(segment_index, layout, imported, assignment, started, phase)
 
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--inspect":
+        return inspect_restart_state(sys.argv[2])
     if len(sys.argv) != 2:
-        fail("usage: itensor-spin-segment segment.json")
+        fail("usage: itensor-spin-segment segment.json | --inspect inventory.json")
     started = time.time()
     config = json.loads(Path(sys.argv[1]).read_text())
     if config.get("format_version") != 1:

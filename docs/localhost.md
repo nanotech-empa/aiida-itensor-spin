@@ -33,6 +33,11 @@ so checkpoint inspection and computation use one Julia installation. Set this
 variable in the Code environment when installing Julia in another prefix;
 no Daint executable is needed for localhost execution.
 
+The same local Code supports `--inspect inventory.json`, used by the official
+inventory-first restart workflow. This mode reads the ground-state checkpoint
+and preserved worker state; it does not launch spectral workers or edit the
+source folder. New spectral work belongs to the following segment.
+
 ## Prepare the Python and Julia environments
 
 From the repository root:
