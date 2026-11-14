@@ -27,6 +27,12 @@ Install it under a stable user-owned prefix such as
 `/home/jovyan/opt/julia-1.12.6`. Do not reuse an x86_64 Julia binary in an
 ARM64 container.
 
+The local launcher uses `ITENSOR_SPIN_JULIA` when configured, otherwise the
+prefix above. It forwards the same executable to the spectral rank workers,
+so checkpoint inspection and computation use one Julia installation. Set this
+variable in the Code environment when installing Julia in another prefix;
+no Daint executable is needed for localhost execution.
+
 ## Prepare the Python and Julia environments
 
 From the repository root:
