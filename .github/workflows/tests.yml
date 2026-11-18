@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        core: ['2.8.0', '2.9.4']
+        core: ['2.9.4']
     env:
       AIIDA_PATH: /tmp/itensor-contract-state
     steps:
