@@ -8,7 +8,7 @@ version = "0.4.3.dev0"
 description = "Restart-safe AiiDA workflows for Julia/ITensor spin spectra"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["aiida-core>=2.8,<3"]
+dependencies = ["aiida-core>=2.9.4,<3"]
 
 [project.entry-points."aiida.calculations"]
 "itensor_spin.ground_state" = "aiida_itensor_spin.calculations:GroundStateCalculation"
